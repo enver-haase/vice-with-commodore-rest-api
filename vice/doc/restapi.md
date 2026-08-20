@@ -131,6 +131,28 @@ client than a wrong one.
   UDP; a worthwhile feature, and a separate one.
 - Chunked request bodies. Clients of this API announce a `Content-Length`.
 
+## Worth doing next: the Ident Service
+
+The hardware is discoverable, and VICE is not. Since firmware 3.11 the device
+runs an *Ultimate Ident Service* — `SocketDMA::identThread` in
+`software/network/socket_dma.cc`: a UDP server on **port 64**, bound to
+`INADDR_ANY`, answering unicast and broadcast, enabled by default. Send any
+payload; if its first four bytes are exactly `json` the reply is a JSON object
+with `product`, `firmware_version`, `fpga_version`, `core_version`, `hostname`,
+`menu_header`, an echo of the request bytes after the first four, and
+`password_protected` when a password is set. Anything else gets a CSV line,
+`<request truncated to 32 bytes>,<hostname>,<menu_header>`.
+
+This is how existing tools are meant to find a device, and answering it would
+make VICE visible to all of them at once rather than requiring each client to
+learn about emulators — which is otherwise the alternative, since a client that
+identifies devices by the `product` string will not recognise `VICE <machine>`.
+It is a small amount of code: a UDP socket polled from the same vsync hook, and
+the same values `/v1/info` already reports. Left out of this patch to keep it to
+one feature, and because answering a discovery broadcast is a decision about
+visibility on the local network that deserves its own resource and its own
+default rather than riding along on `RESTAPIServer`.
+
 ## Implementation notes
 
 `src/restapi.c` owns the listening socket and the connections, and serves them
