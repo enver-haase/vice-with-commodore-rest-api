@@ -315,6 +315,10 @@ bool ui_pause_loop_iteration(void)
     ui_dispatch_next_event();
     archdep_usleep(10000);
     */
+
+    /* let the machine keep serving clients while paused */
+    vsync_pause_hook();
+
     return is_paused;
 }
 
