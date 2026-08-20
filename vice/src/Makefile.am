@@ -247,6 +247,9 @@ noinst_HEADERS = \
 	rawfile.h \
 	rawnet.h \
 	resources.h \
+	restapi.h \
+	restapi_http.h \
+	restapi_routes.h \
 	riot.h \
 	romset.h \
 	scpu64ui.h \
@@ -694,6 +697,15 @@ if HAVE_RESIDFP
 vsid_libs += $(residfp_lib)
 endif
 
+# The Ultimate64 compatible REST API is built into the C64 emulators only. The
+# Ultimate64 is a C64 board and the 1541-Ultimate II+ a C64 cartridge; on a PET
+# or a VIC-20 the API would advertise a device those machines never had. The
+# C128 is left out on purpose.
+restapi_sources = \
+	restapi.c \
+	restapi_http.c \
+	restapi_routes.c
+
 vsid_SOURCES = $(base_sources) $(midi_sources)
 vsid_LDADD = $(vsid_libs) $(emu_extlibs) @TFE_LIBS@ @NETPLAY_LIBS@ $(VSID_RES)
 
@@ -753,7 +765,7 @@ x64_libs =  \
 	$(hotkeys_lib) \
 	$(zmbv_lib)
 
-x64_SOURCES = $(base_sources) $(midi_sources)
+x64_SOURCES = $(base_sources) $(midi_sources) $(restapi_sources)
 x64_LDADD = $(x64_libs) $(emu_extlibs) @TFE_LIBS@ @NETPLAY_LIBS@ $(X64_RES)
 x64_DEPENDENCIES = $(x64_libs)
 if HAVE_DEBUG
@@ -811,7 +823,7 @@ x64sc_libs =  \
 	$(hotkeys_lib) \
 	$(zmbv_lib)
 
-x64sc_SOURCES = $(base_sources) $(midi_sources)
+x64sc_SOURCES = $(base_sources) $(midi_sources) $(restapi_sources)
 x64sc_LDADD = $(x64sc_libs) $(emu_extlibs) @TFE_LIBS@ @NETPLAY_LIBS@ $(X64SC_RES)
 x64sc_DEPENDENCIES = $(x64sc_libs)
 if HAVE_DEBUG
@@ -933,7 +945,7 @@ xscpu64_libs =  \
 	$(hotkeys_lib) \
 	$(zmbv_lib)
 
-xscpu64_SOURCES = $(base_sources) $(midi_sources)
+xscpu64_SOURCES = $(base_sources) $(midi_sources) $(restapi_sources)
 xscpu64_LDADD = $(xscpu64_libs) $(emu_extlibs) @TFE_LIBS@ @NETPLAY_LIBS@ $(XSCPU64_RES)
 xscpu64_DEPENDENCIES = $(xscpu64_libs)
 if HAVE_DEBUG

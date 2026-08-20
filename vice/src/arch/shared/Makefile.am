@@ -99,6 +99,7 @@ libarchdep_a_SOURCES = \
 	archdep_getcwd.c \
 	archdep_glob.c \
 	archdep_home_path.c \
+	archdep_hostname.c \
 	archdep_icon_path.c \
 	archdep_is_haiku.c \
 	archdep_is_macos_bindist.c \
@@ -213,6 +214,7 @@ EXTRA_DIST = \
 	archdep_getcwd.h \
 	archdep_glob.h \
 	archdep_home_path.h \
+	archdep_hostname.h \
 	archdep_icon_path.h \
 	archdep_is_haiku.h \
 	archdep_is_macos_bindist.h \
