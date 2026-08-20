@@ -264,6 +264,7 @@ static long cycles_per_sec;
 
 /* Function to call at the end of every screen frame. */
 static void (*vsync_hook)(void);
+static void (*pause_hook)(void) = NULL;
 
 /* ------------------------------------------------------------------------- */
 
@@ -323,6 +324,18 @@ void vsync_set_machine_parameter(double refresh, long cycles)
 double vsync_get_refresh_frequency(void)
 {
     return refresh_frequency;
+}
+
+void vsync_set_pause_hook(void (*hook)(void))
+{
+    pause_hook = hook;
+}
+
+void vsync_pause_hook(void)
+{
+    if (pause_hook != NULL) {
+        pause_hook();
+    }
 }
 
 void vsync_init(void (*hook)(void))
