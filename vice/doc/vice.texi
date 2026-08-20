@@ -9417,6 +9417,30 @@ The local address the remote monitor should bind to
 @itemx +binarymonitor
 Enable/Disable binary monitor
 
+@findex -restapi, +restapi
+@item -restapi
+@itemx +restapi
+Enable/Disable the Ultimate64 compatible REST API server
+(@code{RESTAPIServer=1}, @code{RESTAPIServer=0}). Available in the C64 emulators
+only, since that is the hardware the API belongs to.
+
+@findex -restapiaddress
+@item -restapiaddress <name>
+The local address the REST API server should bind to
+(@code{RESTAPIServerAddress}). Defaults to @code{ip4://127.0.0.1:8080}.
+
+@findex -restapipassword
+@item -restapipassword <password>
+Require this password in the @code{X-Password} header of every REST API
+request (@code{RESTAPIPassword}). Empty means no password is checked.
+
+@findex -restapihostname
+@item -restapihostname <name>
+The name this emulator reports to REST API clients in @code{/v1/info}
+(@code{RESTAPIHostname}). Empty means the name of the machine VICE runs on.
+Clients use it to tell one device from another, so it is worth setting when
+several emulators run on the same host.
+
 @findex -binarymonitoraddress
 @item -binarymonitoraddress <name>
 The local address the binary monitor should bind to
