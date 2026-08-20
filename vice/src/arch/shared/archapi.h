@@ -84,6 +84,7 @@
 #include "archdep_getcwd.h"
 #include "archdep_glob.h"
 #include "archdep_home_path.h"
+#include "archdep_hostname.h"
 #include "archdep_icon_path.h"
 #include "archdep_is_haiku.h"
 #include "archdep_is_macos_bindist.h"
