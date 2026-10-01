@@ -561,6 +561,17 @@ void restapi_set_binary(restapi_response_t *resp, unsigned char *data, size_t le
     lib_free(resp->binary);
     resp->binary = data;
     resp->binary_length = length;
+    resp->binary_type = "application/octet-stream";
+}
+
+void restapi_set_html(restapi_response_t *resp, const char *title, const char *text)
+{
+    char *page = lib_msprintf("<html><body><h1>%s</h1>\n<p>%s</p></body></html>\r\n\r\n",
+                              title, text);
+
+    restapi_set_binary(resp, (unsigned char *)page, strlen(page));
+    /* sic: the firmware sends "text_html", and clients get what it sends */
+    resp->binary_type = "text_html";
 }
 
 /** \brief  Append \a text to the comma separated list in \a list */
@@ -697,12 +708,15 @@ char *restapi_response_render(restapi_response_t *resp, size_t *length)
     char *message;
 
     if (resp->binary != NULL && resp->status == RESTAPI_HTTP_OK) {
+        int attachment = strcmp(resp->binary_type, "application/octet-stream") == 0;
         char *header = lib_msprintf("HTTP/1.1 200 OK\r\n"
-                                    "Content-Type: application/octet-stream\r\n"
-                                    "Content-Disposition: attachment\r\n"
+                                    "Content-Type: %s\r\n"
+                                    "%s"
                                     "Content-Length: %lu\r\n"
                                     "Connection: close\r\n"
                                     "\r\n",
+                                    resp->binary_type,
+                                    attachment ? "Content-Disposition: attachment\r\n" : "",
                                     (unsigned long)resp->binary_length);
         size_t header_length = strlen(header);
 

@@ -230,6 +230,33 @@ static void route_info(restapi_request_t *req, restapi_response_t *resp)
     lib_free(product);
 }
 
+/** \brief  GET /v1/help, as firmware 1.1.0 answers it
+ *
+ * The device answers a fixed placeholder page whatever the command, once its
+ * generic parameter check (ArgsURI::Validate() in routes.h) has passed: every
+ * parameter must be one the call knows, and "command" is required. "none" in
+ * the messages is the call's command name, as the device prints it.
+ */
+static void route_help(restapi_request_t *req, restapi_response_t *resp)
+{
+    int i;
+
+    for (i = 0; i < req->param_count; i++) {
+        if (strcmp(req->params[i].name, "command") != 0) {
+            resp->status = RESTAPI_HTTP_BAD_REQUEST;
+            restapi_error(resp, "Function none does not have parameter %s",
+                          req->params[i].name);
+        }
+    }
+    if (restapi_param(req, "command") == NULL) {
+        resp->status = RESTAPI_HTTP_BAD_REQUEST;
+        restapi_error(resp, "Function none requires parameter command");
+    }
+    if (resp->status == RESTAPI_HTTP_OK) {
+        restapi_set_html(resp, "This function provides some help!", "Help text.");
+    }
+}
+
 /* ------------------------------------------------------------------------- */
 /* machine                                                                   */
 
@@ -1202,6 +1229,7 @@ static void route_files_create_d81(restapi_request_t *req, restapi_response_t *r
 static const route_t routes[] = {
     { RESTAPI_METHOD_GET,  "version", "none",   route_version },
     { RESTAPI_METHOD_GET,  "info",    "none",   route_info },
+    { RESTAPI_METHOD_GET,  "help",    "none",   route_help },
 
     { RESTAPI_METHOD_PUT,  "machine", "reset",  route_machine_reset },
     { RESTAPI_METHOD_PUT,  "machine", "reboot", route_machine_reboot },
