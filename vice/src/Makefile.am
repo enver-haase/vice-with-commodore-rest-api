@@ -250,6 +250,8 @@ noinst_HEADERS = \
 	restapi.h \
 	restapi_http.h \
 	restapi_routes.h \
+	restapi_sidcrt.h \
+	restapi_sidplay.h \
 	riot.h \
 	romset.h \
 	scpu64ui.h \
@@ -704,7 +706,8 @@ endif
 restapi_sources = \
 	restapi.c \
 	restapi_http.c \
-	restapi_routes.c
+	restapi_routes.c \
+	restapi_sidplay.c
 
 vsid_SOURCES = $(base_sources) $(midi_sources)
 vsid_LDADD = $(vsid_libs) $(emu_extlibs) @TFE_LIBS@ @NETPLAY_LIBS@ $(VSID_RES)

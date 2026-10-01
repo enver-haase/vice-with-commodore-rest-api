@@ -145,6 +145,26 @@ check "colon in query"   "$(curl -s -m 5 "$B/version?note=a:b")" '"version":"0.1
 check "garbage line"     "$(printf 'NOTHTTP\r\n\r\n' | nc -w 2 127.0.0.1 8464 | head -1)" "404"
 check "survives all"     "$(curl -s -m 5 $B/version)" '"version":"0.1"'
 
+print "== runners: sidplay =="
+mem(){ curl -s -m 5 "$B/machine:readmem?address=$1&length=$2" | hex }
+check "PUT sidplay"      "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test.sid")" '"errors":[]'
+sleep 4
+check "default song"     "$(mem 11f0 1)" "00"
+A=$(mem 11f1 1); sleep 1; Z=$(mem 11f1 1)
+[[ "$A" != "$Z" ]] && ok "tune plays ($A -> $Z)" || bad "tune does not play ($A -> $Z)"
+check "cartridge gone"   "$(mem 8004 5)" "0000000000"
+check "PUT song 3"       "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test.sid&songnr=3")" '"errors":[]'
+sleep 4
+check "song 3 started"   "$(mem 11f0 1)" "02"
+check "POST song 2"      "$(curl -s -m 10 -X POST -F file=@$S/test.sid "$B/runners:sidplay?songnr=2")" '"errors":[]'
+sleep 4
+check "song 2 started"   "$(mem 11f0 1)" "01"
+check "song too high"    "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test.sid&songnr=4")" "Invalid Song Number Requested"
+check "song past 256"    "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test.sid&songnr=300")" "Undefined subsystem command"
+check "not a SID"        "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test.prg")" "Error detected in file format"
+check "no such file"     "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/nothing.sid")" "Cannot open file"
+check "MUS data"         "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test-mus.sid")" "not supported on this architecture"
+
 print "== runners: cartridge =="
 check "PUT run_crt"      "$(curl -s -m 5 -X PUT "$B/runners:run_crt?file=$S/test.crt")" '"errors":[]'
 sleep 5
