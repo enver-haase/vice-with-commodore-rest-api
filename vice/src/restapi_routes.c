@@ -60,6 +60,7 @@
 #include "restapi.h"
 #include "restapi_http.h"
 #include "restapi_routes.h"
+#include "restapi_sidplay.h"
 #include "ui.h"
 #include "util.h"
 #include "vdrive-command.h"
@@ -607,6 +608,7 @@ void restapi_routes_shutdown(void)
     release_runner_upload();
     release_cart_upload();
     restore_drive_roms();
+    restapi_sidplay_shutdown();
 }
 
 /** \brief  Drive type as the API's vocabulary knows it
@@ -1246,6 +1248,8 @@ static const route_t routes[] = {
     { RESTAPI_METHOD_POST, "runners", "load_prg", route_runners_load_prg },
     { RESTAPI_METHOD_PUT,  "runners", "run_crt",  route_runners_run_crt },
     { RESTAPI_METHOD_POST, "runners", "run_crt",  route_runners_run_crt },
+    { RESTAPI_METHOD_PUT,  "runners", "sidplay",  restapi_sidplay },
+    { RESTAPI_METHOD_POST, "runners", "sidplay",  restapi_sidplay },
 
     { RESTAPI_METHOD_GET,  "drives",  "none",   route_drives_list },
     { RESTAPI_METHOD_PUT,  "drives",  "mount",  route_drives_mount },

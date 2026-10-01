@@ -698,6 +698,7 @@ static const char *status_text(int status)
         case RESTAPI_HTTP_PAYLOAD_TOO_LARGE:    return "Payload Too Large";
         case RESTAPI_HTTP_UNSUPPORTED_MEDIA_TYPE: return "Unsupported Media Type";
         case RESTAPI_HTTP_NOT_IMPLEMENTED:      return "Not Implemented";
+        case RESTAPI_HTTP_INSUFFICIENT_STORAGE: return "Insufficient Storage";
         default:                                return "Internal Server Error";
     }
 }
