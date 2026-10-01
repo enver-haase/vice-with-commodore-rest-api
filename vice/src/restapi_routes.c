@@ -406,6 +406,14 @@ static char *append_drive_info(char *json, unsigned int unit, const char *letter
     resources_get_int_sprintf("Drive%dType", &drive_type, (int)unit);
     if (image != NULL) {
         util_fname_split(image, &directory, &name);
+        /* clients join image_path and image_file as they come, so the path
+           has to end in a separator */
+        if (*directory != '\0'
+                && directory[strlen(directory) - 1] != ARCHDEP_DIR_SEP_CHR) {
+            char *with_sep = util_concat(directory, ARCHDEP_DIR_SEP_STR, NULL);
+            lib_free(directory);
+            directory = with_sep;
+        }
     }
     type_name = drive_type_name(drive_type);
     rom_resource = drive_rom_resource(drive_type);
