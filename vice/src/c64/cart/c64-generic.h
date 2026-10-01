@@ -45,6 +45,10 @@ int generic_ultimax_bin_attach(const char *filename, uint8_t *rawcart);
 int generic_crt_attach(FILE *fd, uint8_t *rawcart);
 void generic_8kb_detach(void);
 void generic_16kb_detach(void);
+
+/* the $DFFF switch of the Ultimate's cartridge emulation, see c64-generic.c */
+void generic_16kb_request_ultimate_switch(int enable);
+int generic_16kb_ultimate_switched_off(void);
 void generic_ultimax_detach(void);
 
 uint8_t generic_roml_read(uint16_t addr);
