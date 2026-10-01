@@ -552,7 +552,15 @@ void restapi_response_free(restapi_response_t *resp)
 {
     lib_free(resp->fields);
     lib_free(resp->errors);
+    lib_free(resp->binary);
     memset(resp, 0, sizeof(restapi_response_t));
+}
+
+void restapi_set_binary(restapi_response_t *resp, unsigned char *data, size_t length)
+{
+    lib_free(resp->binary);
+    resp->binary = data;
+    resp->binary_length = length;
 }
 
 /** \brief  Append \a text to the comma separated list in \a list */
@@ -677,6 +685,7 @@ static const char *status_text(int status)
         case RESTAPI_HTTP_NOT_FOUND:            return "Not Found";
         case RESTAPI_HTTP_PRECONDITION_FAILED:  return "Precondition Failed";
         case RESTAPI_HTTP_PAYLOAD_TOO_LARGE:    return "Payload Too Large";
+        case RESTAPI_HTTP_UNSUPPORTED_MEDIA_TYPE: return "Unsupported Media Type";
         case RESTAPI_HTTP_NOT_IMPLEMENTED:      return "Not Implemented";
         default:                                return "Internal Server Error";
     }
@@ -686,6 +695,29 @@ char *restapi_response_render(restapi_response_t *resp, size_t *length)
 {
     char *json;
     char *message;
+
+    if (resp->binary != NULL && resp->status == RESTAPI_HTTP_OK) {
+        char *header = lib_msprintf("HTTP/1.1 200 OK\r\n"
+                                    "Content-Type: application/octet-stream\r\n"
+                                    "Content-Disposition: attachment\r\n"
+                                    "Content-Length: %lu\r\n"
+                                    "Connection: close\r\n"
+                                    "\r\n",
+                                    (unsigned long)resp->binary_length);
+        size_t header_length = strlen(header);
+
+        /* the body may hold NUL bytes, so it is copied, not formatted */
+        message = lib_malloc(header_length + resp->binary_length + 1);
+        memcpy(message, header, header_length);
+        memcpy(message + header_length, resp->binary, resp->binary_length);
+        message[header_length + resp->binary_length] = '\0';
+        lib_free(header);
+
+        if (length != NULL) {
+            *length = header_length + resp->binary_length;
+        }
+        return message;
+    }
 
     json = lib_msprintf("{%s%s\"errors\":[%s]}",
                         (resp->fields != NULL) ? resp->fields : "",
