@@ -66,6 +66,7 @@ then used exactly as `PUT` would use a host file.
 |------------|---------------------------|------------------------|-------------------------------------|
 | GET        | `/v1/version`             |                        | API version (`0.1`, as on hardware) |
 | GET        | `/v1/info`                |                        | product, VICE version, machine      |
+| GET        | `/v1/help`                | `command`              | the device's placeholder page       |
 | PUT        | `/v1/machine:reset`       |                        | CPU reset                           |
 | PUT        | `/v1/machine:reboot`      |                        | power cycle                         |
 | PUT        | `/v1/machine:pause`       |                        | pause emulation                     |
@@ -121,6 +122,12 @@ and `unique_id` keys of the hardware are absent — there is no FPGA to report o
 stub in VICE itself (`arch/headless/ui.c`), so emulation keeps running even
 though the call reports success. It works in the GTK3 and SDL builds.
 
+`help` answers exactly what firmware 1.1.0 does, which is a placeholder: a page
+headed "This function provides some help!" saying "Help text.", whatever
+`command` names, with the device's `Content-Type: text_html` (sic). Without
+`command`, or with any other parameter, it fails the device's generic parameter
+check in the device's words ("Function none requires parameter command").
+
 `machine:readmem` and `machine:writemem` go through the CPU's view of memory,
 as the device's DMA does: `$D020` is the VIC register while I/O is mapped in,
 reading `$E000` gives the KERNAL ROM, and a write under a ROM lands in the RAM
@@ -173,7 +180,6 @@ client than a wrong one.
   report on any host path, which wants limits designed in first.
 - `files:create_dnp` — VICE knows CMD native partitions only inside D1M, D2M,
   D4M and DHD images, and cannot mount a bare `.dnp` file.
-- `help` — on the device it is a stub that answers a fixed placeholder page.
 - `streams:start`, `streams:stop` — the device pushes VIC and audio streams over
   UDP; a worthwhile feature, and a separate one.
 - Chunked request bodies. Clients of this API announce a `Content-Length`.
