@@ -138,9 +138,10 @@ jobs:
         run: |
           title="Upstream sync failed"
           body="Run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} failed against upstream ${{ steps.state.outputs.upstream }}. Nothing was pushed."
-          n=$(gh issue list --state open --search "in:title \"$title\"" --json number -q '.[0].number')
+          # gh would pick the fork's parent, which has issues disabled
+          n=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number -q '.[0].number')
           if [ -n "$n" ]; then
-            gh issue comment "$n" --body "$body"
+            gh issue comment -R "$GITHUB_REPOSITORY" "$n" --body "$body"
           else
-            gh issue create --title "$title" --body "$body"
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body"
           fi
