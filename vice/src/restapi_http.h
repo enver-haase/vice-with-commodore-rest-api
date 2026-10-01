@@ -100,9 +100,9 @@ typedef struct restapi_request_s {
 /** \brief  A response under construction
  *
  * Every API response is a JSON object which always ends in an "errors" array,
- * mirroring the firmware's ResponseWrapper. The exception is a successful call
- * that returns data, such as machine:readmem: it answers with the bytes
- * themselves, as the firmware's binary_response() does.
+ * mirroring the firmware's ResponseWrapper. The exceptions are the calls the
+ * firmware answers otherwise: machine:readmem with the bytes themselves
+ * (binary_response()), and help with a page (html_response()).
  */
 typedef struct restapi_response_s {
     char *fields;           /* accumulated "key":value pairs, comma separated */
@@ -110,8 +110,9 @@ typedef struct restapi_response_s {
     char *errors;           /* accumulated JSON strings, comma separated */
     size_t errors_size;
     int status;
-    unsigned char *binary;  /* body of a binary response, or NULL */
+    unsigned char *binary;  /* body of a non-JSON response, or NULL */
     size_t binary_length;
+    const char *binary_type;    /* its Content-Type */
 } restapi_response_t;
 
 /* request handling */
@@ -159,6 +160,13 @@ void restapi_error(restapi_response_t *resp, const char *fmt, ...) VICE_ATTR_PRI
  * back into the usual JSON object.
  */
 void restapi_set_binary(restapi_response_t *resp, unsigned char *data, size_t length);
+
+/** \brief  Answer with a page, as the firmware's html_response() does
+ *
+ * \param[in]   title   text of the page's heading
+ * \param[in]   text    text of its one paragraph
+ */
+void restapi_set_html(restapi_response_t *resp, const char *title, const char *text);
 
 /** \brief  Serialize \a resp into a complete HTTP response message
  *
