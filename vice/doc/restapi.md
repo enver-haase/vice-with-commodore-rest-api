@@ -70,6 +70,10 @@ then used exactly as `PUT` would use a host file.
 | PUT        | `/v1/machine:reboot`      |                        | power cycle                         |
 | PUT        | `/v1/machine:pause`       |                        | pause emulation                     |
 | PUT        | `/v1/machine:resume`      |                        | resume emulation                    |
+| PUT        | `/v1/machine:poweroff`    |                        | quit the emulator                   |
+| GET        | `/v1/machine:readmem`     | `address`, `length`    | memory as the CPU sees it, binary   |
+| PUT        | `/v1/machine:writemem`    | `address`, `data`      | write 1 to 128 bytes given in hex   |
+| POST       | `/v1/machine:writemem`    | `address`, upload      | write the uploaded bytes            |
 | PUT        | `/v1/runners:run_prg`     | `file`                 | autostart a program                 |
 | POST       | `/v1/runners:run_prg`     | uploaded file          | autostart an uploaded program       |
 | PUT/POST   | `/v1/runners:load_prg`    | `file` / upload        | load without running                |
@@ -79,6 +83,13 @@ then used exactly as `PUT` would use a host file.
 | POST       | `/v1/drives/<d>:mount`    | upload, `mode`         | attach an uploaded disk image       |
 | PUT        | `/v1/drives/<d>:remove`   |                        | detach                              |
 | PUT        | `/v1/drives/<d>:reset`    |                        | reset the drive CPU                 |
+| PUT        | `/v1/drives/<d>:on`       |                        | switch the drive on                 |
+| PUT        | `/v1/drives/<d>:off`      |                        | switch the drive off                |
+| PUT        | `/v1/drives/<d>:set_mode` | `mode`                 | make it a 1541, 1571 or 1581        |
+| PUT/POST   | `/v1/drives/<d>:load_rom` | `file` / upload        | replace the drive's DOS ROM         |
+| PUT        | `/v1/files/<path>:create_d64` | `tracks`, `diskname` | create a formatted D64 (35 or 40 tracks) |
+| PUT        | `/v1/files/<path>:create_d71` | `diskname`         | create a formatted D71              |
+| PUT        | `/v1/files/<path>:create_d81` | `diskname`         | create a formatted D81              |
 
 `<d>` is `a` (unit 8) or `b` (unit 9); unit numbers `8` to `11` are accepted too.
 Parameters are always read from the query string, including on `POST`, as they
@@ -110,6 +121,38 @@ and `unique_id` keys of the hardware are absent — there is no FPGA to report o
 stub in VICE itself (`arch/headless/ui.c`), so emulation keeps running even
 though the call reports success. It works in the GTK3 and SDL builds.
 
+`machine:readmem` and `machine:writemem` go through the CPU's view of memory,
+as the device's DMA does: `$D020` is the VIC register while I/O is mapped in,
+reading `$E000` gives the KERNAL ROM, and a write under a ROM lands in the RAM
+below it. Reading is a peek, so looking at an I/O register does not acknowledge
+an interrupt the way a real bus read would. The address is read the way firmware
+1.1.0 reads it, with `strtol()` and a range check only: `12zz` is `$0012` and
+`zz` is `$0000`. Later firmware for other Ultimate products rejects those; VICE
+follows Commodore's release.
+
+`machine:poweroff` quits VICE, after the response has gone out. A client that
+switches the machine off expects it to be gone.
+
+`drives:off` sets the unit's drive type to none and `drives:on` brings back the
+type it had, since VICE has no separate power switch for a drive. `set_mode` on a
+drive that is off changes the type it comes back with, as on the device.
+`set_mode 1541` leaves a 1541-II alone: it already is a 1541 in the API's terms.
+
+`drives:load_rom` replaces the DOS ROM resource of the drive's current type
+(`DosName1541` and so on), so it applies to every unit of that type, where the
+device loads it into one drive. The ROM must be 16K or 32K, and 32K for a 1570,
+1571 or 1581. The original resource values come back when the emulator exits, so
+saved settings never point at an uploaded ROM's temporary file.
+
+The `files` routes take the rest of the URL as an absolute host path:
+`/v1/files/tmp/new.d64:create_d64` creates `/tmp/new.d64`. Unlike the device,
+they refuse to overwrite an existing file, since on a host that file can be
+anything the user owns. `create_d64` takes 35 or 40 tracks, the sizes VICE
+recognises, where the device takes 35 to 41. A `diskname` ending in `,XY` sets
+the disk ID, as on the device; without one, the file name minus its extension
+names the disk. The BAM covers the standard 683 sectors even on a 40 track image,
+as the device's format does.
+
 `GET /v1/drives` folds VICE's drive models into the API's vocabulary: 1540, 1541,
 1541-II and 1551 report as `1541`, the 1570/1571 family as `1571`, the 1581 as
 `1581`. A model with no counterpart (a CMD FD-2000, say) reports its VICE type
@@ -120,13 +163,17 @@ client than a wrong one.
 
 - `runners:sidplay`, `runners:modplay` — the SID player belongs in `vsid`, and
   the MOD player is a REU program on the device.
-- `machine:readmem`, `machine:writemem`, `machine:debugreg`, `machine:measure` —
-  the binary monitor already covers memory access properly.
+- `machine:debugreg`, `machine:measure` — they read FPGA internals.
 - `machine:menu_button` — there is no device menu to open.
+- `drives:unlink` — like the `unlinked` mount mode, it keeps writes in the
+  device's RAM, which has no equivalent here.
 - `configs/*` — VICE's resources and the device's configuration items are
   different sets of things; mapping them needs a decision about naming first.
-- `files/*` — filesystem access over HTTP wants sandboxing designed in, not
-  bolted on.
+- `files:info` — it answers from the device's own filesystem; here it would
+  report on any host path, which wants limits designed in first.
+- `files:create_dnp` — VICE knows CMD native partitions only inside D1M, D2M,
+  D4M and DHD images, and cannot mount a bare `.dnp` file.
+- `help` — on the device it is a stub that answers a fixed placeholder page.
 - `streams:start`, `streams:stop` — the device pushes VIC and audio streams over
   UDP; a worthwhile feature, and a separate one.
 - Chunked request bodies. Clients of this API announce a `Content-Length`.
