@@ -17,7 +17,8 @@ screen(){ printf 'm 0400 07e7\nx\n' | eval $M | grep -ic "$1" }
 hex(){ od -An -tx1 | tr -d ' \n' }
 drive_a(){ curl -s -m 5 $B/drives | python3 -c "import json,sys; d=json.load(sys.stdin)['drives'][0]['a']; print(d['$1'])" }
 
-pkill -f "x64sc -restapi" 2>/dev/null; sleep 1
+# -9: an emulator stuck in a loop ignores SIGTERM and would keep the port
+pkill -9 -f "x64sc -restapi" 2>/dev/null; sleep 1
 cd $V/src
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy VICE_DATADIR=$V/data \
   ./x64sc -restapi -restapiaddress ip4://127.0.0.1:8464 \
@@ -76,6 +77,23 @@ ROM=$(ls $V/data/DRIVES/dos1541-325302-01+901229-05.bin)
 check "POST load_rom"    "$(curl -s -m 10 -X POST -F file=@$ROM $B/drives/a:load_rom)" '"errors":[]'
 [[ "$(drive_a rom)" == */vice.* ]] && ok "drive runs the uploaded ROM" || bad "drive ROM not replaced ($(drive_a rom))"
 check "alive after ROM"  "$(curl -s -m 5 $B/version)" '"version":"0.1"'
+
+print "== drives: repeated type changes =="
+# drive_set_disk_drive_type() once set the drive clock back to 0 without
+# resetting the disk rotation; x64sc then spun through an unsigned wrap of
+# the cycle count and hung, within a dozen rounds of this in every run
+hung=0
+for round in $(seq 1 15); do
+  for m in 1571 1541 1581 1541 1571 1581; do
+    if [[ -z "$(curl -s -m 5 -X PUT "$B/drives/a:set_mode?mode=$m")" ]]; then
+      hung=1; break 2
+    fi
+    sleep 0.$((RANDOM % 9))
+  done
+  curl -s -m 5 -X PUT $B/drives/a:off > /dev/null; curl -s -m 5 -X PUT $B/drives/a:on > /dev/null
+done
+(( hung == 0 )) && ok "90 type changes, emulator still answers" || bad "emulator hung in round $round changing to $m"
+curl -s -m 5 -X PUT "$B/drives/a:set_mode?mode=1541" > /dev/null
 
 print "== pause / resume =="
 check "pause"            "$(curl -s -m 5 -X PUT $B/machine:pause)" '"errors":[]'
