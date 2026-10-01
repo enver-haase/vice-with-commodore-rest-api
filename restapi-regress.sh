@@ -14,6 +14,8 @@ ok()   { print -- "  PASS  $1"; pass=$((pass+1)) }
 bad()  { print -- "  FAIL  $1"; fail=$((fail+1)) }
 check(){ if [[ "$2" == *"$3"* ]]; then ok "$1"; else bad "$1 (got: ${2:0:90})"; fi }
 screen(){ printf 'm 0400 07e7\nx\n' | eval $M | grep -ic "$1" }
+hex(){ od -An -tx1 | tr -d ' \n' }
+drive_a(){ curl -s -m 5 $B/drives | python3 -c "import json,sys; d=json.load(sys.stdin)['drives'][0]['a']; print(d['$1'])" }
 
 pkill -f "x64sc -restapi" 2>/dev/null; sleep 1
 cd $V/src
@@ -56,11 +58,60 @@ check "missing image"    "$(curl -s -m 5 -X PUT $B/drives/a:mount)" "Missing req
 check "PUT remove"       "$(curl -s -m 5 -X PUT $B/drives/a:remove)" '"errors":[]'
 check "PUT drive reset"  "$(curl -s -m 5 -X PUT $B/drives/a:reset)" '"errors":[]'
 
+print "== drives: power, mode and ROM =="
+check "set_mode 1581"    "$(curl -s -m 5 -X PUT "$B/drives/a:set_mode?mode=1581")" '"mode":"1581"'
+check "now a 1581"       "$(drive_a type)" "1581"
+check "off"              "$(curl -s -m 5 -X PUT $B/drives/a:off)" '"errors":[]'
+check "reported off"     "$(drive_a enabled)" "False"
+check "set_mode while off" "$(curl -s -m 5 -X PUT "$B/drives/a:set_mode?mode=1571")" '"errors":[]'
+check "stays off"        "$(drive_a enabled)" "False"
+check "on"               "$(curl -s -m 5 -X PUT $B/drives/a:on)" '"errors":[]'
+check "comes back as set" "$(drive_a type)" "1571"
+check "unknown mode"     "$(curl -s -m 5 -X PUT "$B/drives/a:set_mode?mode=1551")" "Invalid Drive Type"
+check "unknown drive"    "$(curl -s -m 5 -X PUT $B/drives/softiec:on)" "Invalid Drive"
+head -c 16384 /dev/zero > $S/rom16k.bin
+check "16K ROM in a 1571" "$(curl -s -m 5 -X PUT "$B/drives/a:load_rom?file=$S/rom16k.bin")" "Drive ROM is invalid"
+check "back to 1541"     "$(curl -s -m 5 -X PUT "$B/drives/a:set_mode?mode=1541")" '"errors":[]'
+ROM=$(ls $V/data/DRIVES/dos1541-325302-01+901229-05.bin)
+check "POST load_rom"    "$(curl -s -m 10 -X POST -F file=@$ROM $B/drives/a:load_rom)" '"errors":[]'
+[[ "$(drive_a rom)" == */vice.* ]] && ok "drive runs the uploaded ROM" || bad "drive ROM not replaced ($(drive_a rom))"
+check "alive after ROM"  "$(curl -s -m 5 $B/version)" '"version":"0.1"'
+
 print "== pause / resume =="
 check "pause"            "$(curl -s -m 5 -X PUT $B/machine:pause)" '"errors":[]'
 check "served while paused" "$(curl -s -m 5 $B/version)" '"version":"0.1"'
 check "resume"           "$(curl -s -m 5 -X PUT $B/machine:resume)" '"errors":[]'
 check "alive after resume" "$(curl -s -m 5 $B/version)" '"version":"0.1"'
+
+print "== memory =="
+check "PUT writemem"     "$(curl -s -m 5 -X PUT "$B/machine:writemem?address=d020&data=05")" '"address":"d020-d020"'
+check "VIC register"     "$(curl -s -m 5 "$B/machine:readmem?address=d020&length=1" | hex)" "f5"
+check "KERNAL ROM"       "$(curl -s -m 5 "$B/machine:readmem?address=e000&length=2" | hex)" "8556"
+check "binary response"  "$(curl -s -m 5 -o /dev/null -w '%{content_type}' "$B/machine:readmem?address=0400")" "application/octet-stream"
+printf '\001\002\003' > $S/three.bin
+check "POST writemem"    "$(curl -s -m 10 -X POST -F file=@$S/three.bin "$B/machine:writemem?address=c000")" '"address":"c000-c002"'
+check "read back"        "$(curl -s -m 5 "$B/machine:readmem?address=c000&length=3" | hex)" "010203"
+check "address as 1.1.0" "$(curl -s -m 5 -X PUT "$B/machine:writemem?address=c0zz&data=00")" '"address":"00c0-00c0"'
+check "address too high" "$(curl -s -m 5 "$B/machine:readmem?address=10000")" "Invalid address"
+check "address signed"   "$(curl -s -m 5 "$B/machine:readmem?address=-1")" "Invalid address"
+check "data not hex"     "$(curl -s -m 5 -X PUT "$B/machine:writemem?address=c000&data=0g")" "Invalid char 'g' at position 1."
+check "write past FFFF"  "$(curl -s -m 5 -X PUT "$B/machine:writemem?address=ffff&data=0000")" 'exceeds location $FFFF'
+check "read past FFFF"   "$(curl -s -m 5 "$B/machine:readmem?address=ff00&length=512")" 'exceeds location $FFFF'
+
+print "== files: creating images =="
+C=$S/created; rm -rf $C; mkdir -p $C
+check "create_d64"       "$(curl -s -m 5 -X PUT "$B/files$C/a.d64:create_d64?diskname=hello%2Cab")" '"bytes_written":174848'
+check "create_d64 40"    "$(curl -s -m 5 -X PUT "$B/files$C/b.d64:create_d64?tracks=40")" '"bytes_written":196608'
+check "create_d71"       "$(curl -s -m 5 -X PUT "$B/files$C/c.d71:create_d71")" '"bytes_written":349696'
+check "create_d81"       "$(curl -s -m 5 -X PUT "$B/files$C/d.d81:create_d81")" '"bytes_written":819200'
+check "37 tracks"        "$(curl -s -m 5 -X PUT "$B/files$C/e.d64:create_d64?tracks=37")" "Track count should be 35 or 40."
+check "no overwrite"     "$(curl -s -m 5 -X PUT "$B/files$C/a.d64:create_d64")" "File exists"
+check "D64 name and ID"  "$($V/src/c1541 -attach $C/a.d64 -dir 2>/dev/null)" '"hello           " ab 2a'
+check "D64 40 tracks"    "$($V/src/c1541 -attach $C/b.d64 -dir 2>&1)" "40 tracks"
+check "D71 blocks free"  "$($V/src/c1541 -attach $C/c.d71 -dir 2>/dev/null)" "1328 blocks free"
+check "D81 blocks free"  "$($V/src/c1541 -attach $C/d.d81 -dir 2>/dev/null)" "3160 blocks free"
+check "mount created"    "$(curl -s -m 5 -X PUT "$B/drives/a:mount?image=$C/c.d71")" '"errors":[]'
+curl -s -m 5 -X PUT $B/drives/a:remove > /dev/null
 
 print "== malformed input =="
 check "no /v1"           "$(curl -s -m 5 http://127.0.0.1:8464/version)" "Not a supported API endpoint"
@@ -79,11 +130,13 @@ sleep 5
 
 # the test cartridge parks the CPU in a loop, so this runs after anything
 # that needs the keyboard
-print "== clean shutdown removes retained uploads =="
+print "== poweroff quits and removes retained uploads =="
 T=${TMPDIR:-/tmp}
 curl -s -m 10 -X POST -F image=@$S/test.d64 $B/drives/b:mount > /dev/null
 BEFORE=$(ls $T/vice.* 2>/dev/null | wc -l | tr -d ' ')
-printf 'quit\n' | eval $M > /dev/null 2>&1; sleep 3
+check "poweroff answers" "$(curl -s -m 5 -X PUT $B/machine:poweroff)" '"errors":[]'
+sleep 3
+pgrep -f "x64sc -restapi" > /dev/null && bad "emulator still running after poweroff" || ok "emulator quit"
 AFTER=$(ls $T/vice.* 2>/dev/null | wc -l | tr -d ' ')
 [[ $AFTER -lt $BEFORE ]] && ok "temp files removed on exit ($BEFORE -> $AFTER)" || bad "temp files left behind ($BEFORE -> $AFTER)"
 
