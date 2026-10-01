@@ -36,4 +36,11 @@ void restapi_routes_dispatch(restapi_request_t *req, restapi_response_t *resp);
 /** \brief  Release resources the handlers hold on to, such as mounted uploads */
 void restapi_routes_shutdown(void);
 
+/** \brief  Whether machine:poweroff asked for the emulator to quit
+ *
+ * The server checks this once the response has been sent, so the client
+ * hears back before the connection goes away.
+ */
+int restapi_routes_quit_requested(void);
+
 #endif

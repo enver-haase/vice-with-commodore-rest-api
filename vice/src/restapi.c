@@ -224,6 +224,13 @@ static void serve_request(connection_t *conn, size_t header_length)
 
     restapi_request_free(&req);
     restapi_response_free(&resp);
+
+    if (restapi_routes_quit_requested()) {
+        /* machine:poweroff; quit the way the monitor's "quit" does, from this
+           same thread, once the client has its answer */
+        connection_close(conn);
+        archdep_vice_exit(0);
+    }
 }
 
 /** \brief  Read whatever is pending on \a conn and serve a completed request */

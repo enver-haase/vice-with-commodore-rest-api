@@ -38,6 +38,7 @@
 #define RESTAPI_HTTP_NOT_FOUND              404
 #define RESTAPI_HTTP_PRECONDITION_FAILED    412
 #define RESTAPI_HTTP_PAYLOAD_TOO_LARGE      413
+#define RESTAPI_HTTP_UNSUPPORTED_MEDIA_TYPE 415
 #define RESTAPI_HTTP_INTERNAL_ERROR         500
 #define RESTAPI_HTTP_NOT_IMPLEMENTED        501
 
@@ -99,7 +100,9 @@ typedef struct restapi_request_s {
 /** \brief  A response under construction
  *
  * Every API response is a JSON object which always ends in an "errors" array,
- * mirroring the firmware's ResponseWrapper.
+ * mirroring the firmware's ResponseWrapper. The exception is a successful call
+ * that returns data, such as machine:readmem: it answers with the bytes
+ * themselves, as the firmware's binary_response() does.
  */
 typedef struct restapi_response_s {
     char *fields;           /* accumulated "key":value pairs, comma separated */
@@ -107,6 +110,8 @@ typedef struct restapi_response_s {
     char *errors;           /* accumulated JSON strings, comma separated */
     size_t errors_size;
     int status;
+    unsigned char *binary;  /* body of a binary response, or NULL */
+    size_t binary_length;
 } restapi_response_t;
 
 /* request handling */
@@ -146,6 +151,14 @@ void restapi_add_raw(restapi_response_t *resp, const char *key, const char *json
  */
 char *restapi_json_quote(const char *text);
 void restapi_error(restapi_response_t *resp, const char *fmt, ...) VICE_ATTR_PRINTF2;
+
+/** \brief  Answer with \a length bytes of \a data instead of JSON
+ *
+ * Takes ownership of \a data, which must come from lib_malloc(). Only a
+ * response that ends up with status 200 is sent this way; an error turns it
+ * back into the usual JSON object.
+ */
+void restapi_set_binary(restapi_response_t *resp, unsigned char *data, size_t length);
 
 /** \brief  Serialize \a resp into a complete HTTP response message
  *
