@@ -1,16 +1,7 @@
 #!/bin/zsh
 # Regression suite for the Ultimate64-compatible REST API in VICE.
 #
-# Needs three fixtures in $S, all cheap to regenerate:
-#
-#   test.prg  a BASIC program that prints "REST OK":
-#             python3 -c 'import struct;b=bytes([0x99])+b"\"REST OK\""+bytes([0]);
-#             l=struct.pack("<H",0x801+4+len(b))+struct.pack("<H",10)+b;
-#             open("test.prg","wb").write(struct.pack("<H",0x801)+l+b"\x00\x00")'
-#   test.d64  a disk holding it, named HELLO:
-#             c1541 -format "restdisk,01" d64 test.d64 -write test.prg hello
-#   test.crt  an 8K cartridge that cold-starts and prints "CRT OK"
-#             (xa source + CRT container; see the session notes)
+# Needs three fixtures in $S; restapi-fixtures.sh generates them.
 #
 # The emulator is driven over REST on 8464 and inspected through the text
 # monitor on 6510, so it needs no display.
@@ -89,7 +80,7 @@ sleep 5
 # the test cartridge parks the CPU in a loop, so this runs after anything
 # that needs the keyboard
 print "== clean shutdown removes retained uploads =="
-T=$(getconf DARWIN_USER_TEMP_DIR)
+T=${TMPDIR:-/tmp}
 curl -s -m 10 -X POST -F image=@$S/test.d64 $B/drives/b:mount > /dev/null
 BEFORE=$(ls $T/vice.* 2>/dev/null | wc -l | tr -d ' ')
 printf 'quit\n' | eval $M > /dev/null 2>&1; sleep 3
@@ -99,3 +90,4 @@ AFTER=$(ls $T/vice.* 2>/dev/null | wc -l | tr -d ' ')
 pkill -f "x64sc -restapi" 2>/dev/null
 print ""
 print "RESULT: $pass passed, $fail failed"
+(( fail == 0 ))
