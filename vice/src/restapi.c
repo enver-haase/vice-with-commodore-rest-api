@@ -51,6 +51,7 @@
 #include "restapi.h"
 #include "restapi_http.h"
 #include "restapi_routes.h"
+#include "restapi_sidplay.h"
 #include "util.h"
 
 #ifdef HAVE_NETWORK
@@ -342,6 +343,10 @@ void restapi_vsync_hook(void)
         return;
     }
     serving = 1;
+
+    /* a SID tune started over the API is handed to the player cartridge
+       across several frames */
+    restapi_sidplay_poll();
 
     if (vice_network_select_poll_one(listen_socket) > 0) {
         vice_network_socket_t *incoming = vice_network_accept(listen_socket);

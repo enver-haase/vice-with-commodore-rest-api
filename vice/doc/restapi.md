@@ -79,6 +79,8 @@ then used exactly as `PUT` would use a host file.
 | POST       | `/v1/runners:run_prg`     | uploaded file          | autostart an uploaded program       |
 | PUT/POST   | `/v1/runners:load_prg`    | `file` / upload        | load without running                |
 | PUT/POST   | `/v1/runners:run_crt`     | `file` / upload        | attach a cartridge and start it     |
+| PUT        | `/v1/runners:sidplay`     | `file`, `songnr`       | play a SID file                     |
+| POST       | `/v1/runners:sidplay`     | upload(s), `songnr`    | play an uploaded SID file           |
 | GET        | `/v1/drives`              |                        | state of drives `a` and `b`         |
 | PUT        | `/v1/drives/<d>:mount`    | `image`, `mode`        | attach a disk image                 |
 | POST       | `/v1/drives/<d>:mount`    | upload, `mode`         | attach an uploaded disk image       |
@@ -160,6 +162,23 @@ the disk ID, as on the device; without one, the file name minus its extension
 names the disk. The BAM covers the standard 683 sectors even on a 40 track image,
 as the device's format does.
 
+`runners:sidplay` plays a tune the way the device does, with the device's own
+player: the "Ultimate SID Player" cartridge by Wilfred Bos, assembled unchanged
+from firmware 1.1.0's sources (`restapi-sidcrt/`, rebuilt by `restapi-sidcrt.sh`).
+The tune's header is prepared as the firmware prepares it, the machine is reset
+into the cartridge, and the tune is written to memory when the cartridge asks for
+it. The cartridge then switches itself off through `$DFFF`, a switch of the
+device's cartridge emulation that VICE's generic 16KiB cartridge has for this
+purpose only, and is detached. It replaces any cartridge attached before. Song
+lengths come from `SONGLENGTHS/<name>.ssl` next to the file, as on the device,
+or from a second uploaded file on `POST`. The player is GPLv3, where VICE is GPLv2
+or later, so this part cannot go upstream.
+
+The device maps its SIDs to the addresses the tune asks for; VICE sets
+`SidStereo` and `Sid2AddressStart`/`Sid3AddressStart` accordingly, and
+`SidModel` from the first SID's model, since all of VICE's SIDs share one. These
+settings stay as the tune left them.
+
 `GET /v1/drives` folds VICE's drive models into the API's vocabulary: 1540, 1541,
 1541-II and 1551 report as `1541`, the 1570/1571 family as `1571`, the 1581 as
 `1581`. A model with no counterpart (a CMD FD-2000, say) reports its VICE type
@@ -168,8 +187,10 @@ client than a wrong one.
 
 ## Not implemented
 
-- `runners:sidplay`, `runners:modplay` — the SID player belongs in `vsid`, and
-  the MOD player is a REU program on the device.
+- `runners:modplay` — the MOD player drives the sample playback hardware of the
+  Ultimate's FPGA, which VICE does not emulate.
+- `runners:sidplay` for Compute's Sidplayer data (`.mus`, `.str`, and SID files
+  flagged as such): the device plays those with a separate MUS player cartridge.
 - `machine:debugreg`, `machine:measure` — they read FPGA internals.
 - `machine:menu_button` — there is no device menu to open.
 - `drives:unlink` — like the `unlinked` mount mode, it keeps writes in the
