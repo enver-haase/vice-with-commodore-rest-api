@@ -29,6 +29,10 @@ sleep 8
 print "== basics =="
 check "GET version"      "$(curl -s -m 5 $B/version)" '"version":"0.1"'
 check "GET info"         "$(curl -s -m 5 $B/info)" '"product":"VICE C64SC"'
+check "help needs command" "$(curl -s -m 5 $B/help)" "Function none requires parameter command"
+check "help unknown param" "$(curl -s -m 5 "$B/help?command=x&foo=1")" "Function none does not have parameter foo"
+check "help page"        "$(curl -s -m 5 "$B/help?command=machine")" "<h1>This function provides some help!</h1>"
+check "help as text_html" "$(curl -s -m 5 -o /dev/null -w '%{content_type}' "$B/help?command=machine")" "text_html"
 check "GET drives parses" "$(curl -s -m 5 $B/drives | python3 -c 'import json,sys; json.load(sys.stdin); print("valid-json")')" "valid-json"
 
 print "== runners: host file =="
