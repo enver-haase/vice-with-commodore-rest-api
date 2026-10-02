@@ -163,8 +163,14 @@ names the disk. The BAM covers the standard 683 sectors even on a 40 track image
 as the device's format does.
 
 `runners:sidplay` plays a tune the way the device does, with the device's own
-player: the "Ultimate SID Player" cartridge by Wilfred Bos, assembled unchanged
-from firmware 1.1.0's sources (`restapi-sidcrt/`, rebuilt by `restapi-sidcrt.sh`).
+player: the "Ultimate SID Player" cartridge by Wilfred Bos, assembled from
+firmware 1.1.0's sources (`restapi-sidcrt/`, rebuilt by `restapi-sidcrt.sh`) with
+changes on top: the placement fix from the firmware's master (in 3.15a), and
+a SYSTEM line with the detected model for every SID the tune uses, as proposed in
+GideonZ/1541ultimate#949. The model can be detected only for a SID in
+`$D400`-`$D4FF`; a SID elsewhere shows as unknown. The `SID #2` and `SID #3`
+lines show the model the header asks for, and UNKNOWN when it leaves it open,
+rather than the model of the first SID.
 The tune's header is prepared as the firmware prepares it, the machine is reset
 into the cartridge, and the tune is written to memory when the cartridge asks for
 it. The cartridge then switches itself off through `$DFFF`, a switch of the
