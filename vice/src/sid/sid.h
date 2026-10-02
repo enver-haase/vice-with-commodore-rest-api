@@ -56,13 +56,13 @@ enum {
  */
 
 /** \brief  Maximum number of supported SIDs for the FastSID engine */
-#define SID_ENGINE_FASTSID_NUM_SIDS         8
+#define SID_ENGINE_FASTSID_NUM_SIDS         SOUND_SIDS_MAX
 
 /** \brief  Maximum number of supported SIDs for the ReSID engine */
-#define SID_ENGINE_RESID_NUM_SIDS           8
+#define SID_ENGINE_RESID_NUM_SIDS           SOUND_SIDS_MAX
 
 /** \brief  Maximum number of supported SIDs for the ReSIDfp engine */
-#define SID_ENGINE_RESIDFP_NUM_SIDS         8
+#define SID_ENGINE_RESIDFP_NUM_SIDS         SOUND_SIDS_MAX
 
 /** \brief  Maximum number of supported SIDs for the Catweasel Mk3 engine */
 #define SID_ENGINE_CATWEASELMKIII_NUM_SIDS  2
@@ -116,9 +116,9 @@ enum {
 #define SIDTYPE_SIDDTV    1
 #define SIDTYPE_SIDCART   2     /* used by machines that don't have an internal SID */
 
-#define SID_MACHINE_MAX_SID_C64     10
+#define SID_MACHINE_MAX_SID_C64     SOUND_SIDS_MAX
 #define SID_MACHINE_MAX_SID_C64DTV  1
-#define SID_MACHINE_MAX_SID_C128    10
+#define SID_MACHINE_MAX_SID_C128    SOUND_SIDS_MAX
 
 /** \brief  The VIC20 has an optional SID cartridge */
 #define SID_MACHINE_MAX_SID_VIC20   1
@@ -194,48 +194,19 @@ enum {
 void machine_sid2_enable(int val);
 
 uint8_t sid_read(uint16_t address);
-uint8_t sid2_read(uint16_t address);
-uint8_t sid3_read(uint16_t address);
-uint8_t sid4_read(uint16_t address);
-uint8_t sid5_read(uint16_t address);
-uint8_t sid6_read(uint16_t address);
-uint8_t sid7_read(uint16_t address);
-uint8_t sid8_read(uint16_t address);
-uint8_t sid9_read(uint16_t address);
-uint8_t sid10_read(uint16_t address);
 
 uint8_t sid_peek(uint16_t address);
-uint8_t sid2_peek(uint16_t address);
-uint8_t sid3_peek(uint16_t address);
-uint8_t sid4_peek(uint16_t address);
-uint8_t sid5_peek(uint16_t address);
-uint8_t sid6_peek(uint16_t address);
-uint8_t sid7_peek(uint16_t address);
-uint8_t sid8_peek(uint16_t address);
-uint8_t sid9_peek(uint16_t address);
-uint8_t sid10_peek(uint16_t address);
 
 void sid_store(uint16_t address, uint8_t byte);
-void sid2_store(uint16_t address, uint8_t byte);
-void sid3_store(uint16_t address, uint8_t byte);
-void sid4_store(uint16_t address, uint8_t byte);
-void sid5_store(uint16_t address, uint8_t byte);
-void sid6_store(uint16_t address, uint8_t byte);
-void sid7_store(uint16_t address, uint8_t byte);
-void sid8_store(uint16_t address, uint8_t byte);
-void sid9_store(uint16_t address, uint8_t byte);
-void sid10_store(uint16_t address, uint8_t byte);
 
 int sid_dump(void);
-int sid2_dump(void);
-int sid3_dump(void);
-int sid4_dump(void);
-int sid5_dump(void);
-int sid6_dump(void);
-int sid7_dump(void);
-int sid8_dump(void);
-int sid9_dump(void);
-int sid10_dump(void);
+
+/* access to one SID by its number, 0 for the first */
+int sid_get_chip_at(uint16_t address);
+uint8_t sid_read_chip_nr(uint16_t address, int chipno);
+uint8_t sid_peek_chip_nr(uint16_t address, int chipno);
+void sid_store_chip_nr(uint16_t address, uint8_t byte, int chipno);
+int sid_dump_chip_nr(int chipno);
 
 void sid_reset(void);
 
