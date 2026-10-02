@@ -163,10 +163,6 @@ static const slider_t fp_sliders_6581[] = {
       RESIDFP_6581_FILTER_RANGE_MIN / RESIDFP_6581_FILTER_RANGE_ONE,
       RESIDFP_6581_FILTER_RANGE_MAX / RESIDFP_6581_FILTER_RANGE_ONE,
       RESIDFP_6581_FILTER_RANGE_MIN, RESIDFP_6581_FILTER_RANGE_MAX, 0.01f },
-    { "Combined waveform strength", "SidResidCombinedWaveformStrength",       "%1.0f",
-      RESIDFP_COMBINED_WAVEFORM_STRENGTH_MIN / RESIDFP_COMBINED_WAVEFORM_STRENGTH_ONE,
-      RESIDFP_COMBINED_WAVEFORM_STRENGTH_MAX / RESIDFP_COMBINED_WAVEFORM_STRENGTH_ONE,
-      RESIDFP_COMBINED_WAVEFORM_STRENGTH_MIN, RESIDFP_COMBINED_WAVEFORM_STRENGTH_MAX, 1.00f },
     { NULL,            NULL,                     NULL,          0,    0, 0,    0, 0 }
 };
 
@@ -176,7 +172,15 @@ static const slider_t fp_sliders_8580[] = {
       RESIDFP_8580_FILTER_CURVE_MIN / RESIDFP_8580_FILTER_CURVE_ONE,
       RESIDFP_8580_FILTER_CURVE_MAX / RESIDFP_8580_FILTER_CURVE_ONE,
       RESIDFP_8580_FILTER_CURVE_MIN, RESIDFP_8580_FILTER_CURVE_MAX, 0.01f },
-    { "Combined waveform strength", "SidResidCombinedWaveformStrength",       "%1.0f",
+    { NULL,            NULL,                     NULL,          0,    0,0,    0,  0 }
+};
+
+/** \brief  ReSIDfp sliders for both models */
+static const slider_t fp_sliders_common[] = {
+    /* padded with three figure spaces (U+2007, as wide as a digit) to the
+       width of the "%1.2f" of the others, so that the sliders are as long */
+    { "Combined waveform strength", "SidResidCombinedWaveformStrength",
+      "\xe2\x80\x87\xe2\x80\x87\xe2\x80\x87%1.0f",
       RESIDFP_COMBINED_WAVEFORM_STRENGTH_MIN / RESIDFP_COMBINED_WAVEFORM_STRENGTH_ONE,
       RESIDFP_COMBINED_WAVEFORM_STRENGTH_MAX / RESIDFP_COMBINED_WAVEFORM_STRENGTH_ONE,
       RESIDFP_COMBINED_WAVEFORM_STRENGTH_MIN, RESIDFP_COMBINED_WAVEFORM_STRENGTH_MAX, 1.00f },
@@ -278,6 +282,9 @@ static GtkWidget *residfp_6581_grid;
 /** \brief  ReSIDfp 8580 widgets grid */
 static GtkWidget *residfp_8580_grid;
 
+/** \brief  ReSIDfp sliders for both models */
+static GtkWidget *residfp_common_grid;
+
 /** \brief  ReSIDfp 6581 chip profile drop down box */
 static GtkWidget *chip_profile;
 
@@ -301,11 +308,11 @@ static GtkWidget *us_buffsizes;
 /** \brief  Number of extra SIDs widget */
 static GtkWidget *num_sids_widget;
 
-/** \brief  Reference to the extra SID address widgets
+/** \brief  Reference to the widgets of each extra SID: label, address, model
  *
  * Used to enable/disable depending on the number of SIDs active
  */
-static GtkWidget *address_widgets[SOUND_SIDS_MAX];
+static GtkWidget *extra_sid_widgets[SOUND_SIDS_MAX][3];
 
 static void update_filter_widgets(void);
 
@@ -318,7 +325,13 @@ static void update_sid_addresses_sensitivity(int count)
     int n;
     if (sid_machine_can_have_multiple_sids()) {
         for (n = 0; n < sid_machine_get_max_sids() - 1; n++) {
-            gtk_widget_set_sensitive(address_widgets[n], count > n);
+            int w;
+
+            for (w = 0; w < 3; w++) {
+                if (extra_sid_widgets[n][w] != NULL) {
+                    gtk_widget_set_sensitive(extra_sid_widgets[n][w], count > n);
+                }
+            }
         }
     }
 }
@@ -392,6 +405,11 @@ static void update_filter_widgets(void)
     if (residfp_6581_grid != NULL) {
         gtk_widget_set_visible(residfp_6581_grid, engine == SID_ENGINE_RESIDFP && has_6581);
         gtk_widget_set_visible(residfp_8580_grid, engine == SID_ENGINE_RESIDFP && has_8580);
+        gtk_widget_set_visible(residfp_common_grid, engine == SID_ENGINE_RESIDFP);
+        /* the profile and the capacitors are about the 6581 */
+        gtk_widget_set_visible(chip_profile, engine == SID_ENGINE_RESIDFP && has_6581);
+        gtk_widget_set_visible(chip_profile_label, engine == SID_ENGINE_RESIDFP && has_6581);
+        gtk_widget_set_visible(residfp_oldcaps, engine == SID_ENGINE_RESIDFP && has_6581);
     }
 #endif
 }
@@ -486,6 +504,7 @@ static void engine_model_changed_callback(int engine, int model)
     gtk_widget_set_sensitive(residfp_oldcaps,   is_residfp);
     gtk_widget_set_sensitive(residfp_6581_grid, is_residfp);
     gtk_widget_set_sensitive(residfp_8580_grid, is_residfp);
+    gtk_widget_set_sensitive(residfp_common_grid, is_residfp);
     gtk_widget_set_sensitive(chip_profile, is_residfp);
 #endif
 
@@ -684,43 +703,33 @@ static GtkWidget *create_num_sids_widget(void)
     return grid;
 }
 
-/** \brief  Create widget for extra SID addresses
+/** \brief  Create the widgets of an extra SID: label, address and model
  *
- * \param[in]   sid     extra SID number (1-7)
- *
- * \return  GtkGrid
+ * \param[in]   sid     extra SID number, 1 for SID #2
+ * \param[out]  widgets label, address combo and model combo
  */
-static GtkWidget *create_extra_sid_address_widget(int sid)
+static void create_extra_sid_widgets(int sid, GtkWidget *widgets[3])
 {
-    GtkWidget *grid;
-    GtkWidget *combo;
-    GtkWidget *model;
-    GtkWidget *label;
-    char       text[32];
-    char       resource[64];
+    char text[32];
+    char resource[64];
 
     g_snprintf(resource, sizeof resource, "SID%dAddressStart", sid + 1);
     g_snprintf(text, sizeof text, "SID #%d", sid + 1);
 
-    grid = gtk_grid_new();
-    gtk_grid_set_column_spacing(GTK_GRID(grid), 8);
-    label = gtk_label_new(text);
+    widgets[0] = gtk_label_new(text);
+    gtk_widget_set_halign(widgets[0], GTK_ALIGN_START);
     if (machine_class == VICE_MACHINE_C128) {
-        combo = vice_gtk3_resource_combo_hex_new_list(resource,
-                                                      sid_addr_list_c128);
+        widgets[1] = vice_gtk3_resource_combo_hex_new_list(resource,
+                                                           sid_addr_list_c128);
     } else {
-        combo = vice_gtk3_resource_combo_hex_new_list(resource,
-                                                      sid_addr_list_c64);
+        widgets[1] = vice_gtk3_resource_combo_hex_new_list(resource,
+                                                           sid_addr_list_c64);
     }
-    model = vice_gtk3_resource_combo_int_new_sprintf("Sid%dModel",
-                                                     sid_chip_models,
-                                                     sid + 1);
-    gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), combo, 1, 0, 1, 1);
-    g_signal_connect_after(G_OBJECT(model), "changed",
+    widgets[2] = vice_gtk3_resource_combo_int_new_sprintf("Sid%dModel",
+                                                          sid_chip_models,
+                                                          sid + 1);
+    g_signal_connect_after(G_OBJECT(widgets[2]), "changed",
                            G_CALLBACK(on_sid_chip_model_changed), NULL);
-    gtk_grid_attach(GTK_GRID(grid), model, 1, 1, 1, 1);
-    return grid;
 }
 #endif
 
@@ -767,6 +776,9 @@ static GtkWidget *create_reset_button(GtkWidget *slider)
  *
  * \return  GtkGrid
  */
+/** \brief  Labels of all slider blocks, one width for all */
+static GtkSizeGroup *slider_label_group = NULL;
+
 static GtkWidget *create_sliders(const slider_t *slider_decls,
                                  const char     *title)
 {
@@ -798,6 +810,13 @@ static GtkWidget *create_sliders(const slider_t *slider_decls,
 
         decl   = &slider_decls[i];
         label  = label_helper(decl->label);
+        /* the label column is as wide in every slider block, so that the
+           sliders of the 6581, the 8580 and both line up */
+        if (slider_label_group == NULL) {
+            slider_label_group = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
+        }
+        gtk_size_group_add_widget(slider_label_group, label);
+        gtk_label_set_xalign(GTK_LABEL(label), 0.0);
         scale = vice_gtk3_resource_scale_custom_new_printf("%s",
                                                         GTK_ORIENTATION_HORIZONTAL,
                                                         decl->resmin,
@@ -837,28 +856,37 @@ static GtkWidget *create_sliders(const slider_t *slider_decls,
 static GtkWidget *create_sid_address_widgets(void)
 {
     GtkWidget *grid;
-    int        column;
-    int        extra;
+    GtkWidget *header;
     int        max = sid_machine_get_max_sids();
+    int        extras = max - 1;
+    int        blocks = (extras > 6) ? 2 : 1;
+    int        rows = (extras + blocks - 1) / blocks;
+    int        block;
+    int        extra;
+    int        w;
 
     grid = vice_gtk3_grid_new_spaced_with_label(16, 8, "SID I/O addresses and models", 3);
 
-    for (extra = 1; extra < max; extra++) {
-        address_widgets[extra - 1] = create_extra_sid_address_widget(extra);
+    /* a table, one row for each extra SID: SID #n, address, model; more than
+       six go in two blocks side by side */
+    for (block = 0; block < blocks; block++) {
+        header = gtk_label_new("Address");
+        gtk_widget_set_halign(header, GTK_ALIGN_START);
+        gtk_grid_attach(GTK_GRID(grid), header, (block * 3) + 1, 1, 1, 1);
+        header = gtk_label_new("Model");
+        gtk_widget_set_halign(header, GTK_ALIGN_START);
+        gtk_grid_attach(GTK_GRID(grid), header, (block * 3) + 2, 1, 1, 1);
     }
-
-    /* lay out address widgets in a grid of four columns max, skip the first SID */
-    extra  = 0;
-    column = 1;
-    while (extra < max - 1) {
-        while ((column < 5) && (extra < max - 1)) {
-            gtk_grid_attach(GTK_GRID(grid),
-                            address_widgets[extra],
-                            column, ((extra + 1) / 5) + 1, 1, 1);
-            column++;
-            extra++;
+    for (extra = 0; extra < extras; extra++) {
+        block = extra / rows;
+        create_extra_sid_widgets(extra + 1, extra_sid_widgets[extra]);
+        for (w = 0; w < 3; w++) {
+            gtk_grid_attach(GTK_GRID(grid), extra_sid_widgets[extra][w],
+                            (block * 3) + w, (extra % rows) + 2, 1, 1);
         }
-        column = 0;
+        if (block > 0) {
+            gtk_widget_set_margin_start(extra_sid_widgets[extra][0], 32);
+        }
     }
     return grid;
 }
@@ -1159,8 +1187,11 @@ GtkWidget *sid_sound_widget_create(void)
 
     residfp_6581_grid = create_sliders(fp_sliders_6581, "ReSIDfp 6581 filter settings");
     residfp_8580_grid = create_sliders(fp_sliders_8580, "ReSIDfp 8580 filter settings");
+    residfp_common_grid = create_sliders(fp_sliders_common, "ReSIDfp settings for both models");
     gtk_grid_attach(GTK_GRID(grid), residfp_6581_grid, 0, row + 2, 3 ,1);
     gtk_grid_attach(GTK_GRID(grid), residfp_8580_grid, 0, row + 3, 3, 1);
+    gtk_grid_attach(GTK_GRID(grid), residfp_common_grid, 0, row + 4, 3, 1);
+    gtk_widget_set_no_show_all(residfp_common_grid, TRUE);
 
     /* only enable appropriate widgets */
     gtk_widget_set_no_show_all(residfp_6581_grid, TRUE);
@@ -1187,9 +1218,9 @@ GtkWidget *sid_sound_widget_create(void)
     us_diffsizes = create_us_diffsizes_widget();
     us_buffsizes = create_us_buffsizes_widget();
 
-    gtk_grid_attach(GTK_GRID(grid), us_switches, 0, row + 4, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), us_diffsizes, 1, row + 4, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), us_buffsizes, 2, row + 4, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), us_switches, 0, row + 5, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), us_diffsizes, 1, row + 5, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), us_buffsizes, 2, row + 5, 1, 1);
 
     gtk_widget_set_sensitive(us_switches, current_engine == SID_ENGINE_USBSID);
     gtk_widget_set_sensitive(us_diffsizes, current_engine == SID_ENGINE_USBSID);
