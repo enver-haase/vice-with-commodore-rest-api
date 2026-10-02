@@ -62,6 +62,8 @@
  * $VICERES Sid8AddressStart            all
  * $VICERES Sid9AddressStart            all
  * $VICERES Sid10AddressStart            all
+ * $VICERES SidNModel                   all
+ *          (N = 2 and up, one for each extra SID)
  */
 
 #include "vice.h"
@@ -224,6 +226,15 @@ static const vice_gtk3_radiogroup_entry_t us_buffsizes_radio[] = {
 #endif
 
 #if defined(HAVE_FASTSID) || defined(HAVE_RESID) || defined(HAVE_RESID_DTV) || defined(HAVE_RESIDFP)
+/** \brief  Models for extra SIDs */
+static const vice_gtk3_combo_entry_int_t sid_chip_models[] = {
+    { "Same as SID #1",    SID_MODEL_SAME_AS_FIRST },
+    { "6581",              SID_MODEL_6581 },
+    { "8580",              SID_MODEL_8580 },
+    { "8580 + digi boost", SID_MODEL_8580D },
+    VICE_GTK3_COMBO_ENTRY_INT_LIST_END
+};
+
 /** \brief  I/O addresses for extra SID's for the C64 */
 static int sid_addr_list_c64[] = {
     /*N/A*/ 0xd420, 0xd440, 0xd460, 0xd480, 0xd4a0, 0xd4c0, 0xd4e0,
@@ -662,6 +673,7 @@ static GtkWidget *create_extra_sid_address_widget(int sid)
 {
     GtkWidget *grid;
     GtkWidget *combo;
+    GtkWidget *model;
     GtkWidget *label;
     char       text[32];
     char       resource[64];
@@ -679,8 +691,12 @@ static GtkWidget *create_extra_sid_address_widget(int sid)
         combo = vice_gtk3_resource_combo_hex_new_list(resource,
                                                       sid_addr_list_c64);
     }
+    model = vice_gtk3_resource_combo_int_new_sprintf("Sid%dModel",
+                                                     sid_chip_models,
+                                                     sid + 1);
     gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), combo, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), model, 1, 1, 1, 1);
     return grid;
 }
 #endif
@@ -802,7 +818,7 @@ static GtkWidget *create_sid_address_widgets(void)
     int        extra;
     int        max = sid_machine_get_max_sids();
 
-    grid = vice_gtk3_grid_new_spaced_with_label(16, 8, "SID I/O addresses", 3);
+    grid = vice_gtk3_grid_new_spaced_with_label(16, 8, "SID I/O addresses and models", 3);
 
     for (extra = 1; extra < max; extra++) {
         address_widgets[extra - 1] = create_extra_sid_address_widget(extra);
