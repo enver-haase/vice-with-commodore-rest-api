@@ -80,20 +80,6 @@ enum {
     SOUND_OUTPUT_STEREO
 };
 
-/* Sound device amounts */
-enum {
-    SOUND_1_DEVICE = 1,
-    SOUND_2_DEVICES,
-    SOUND_3_DEVICES,
-    SOUND_4_DEVICES,
-    SOUND_5_DEVICES,
-    SOUND_6_DEVICES,
-    SOUND_7_DEVICES,
-    SOUND_8_DEVICES,
-    SOUND_9_DEVICES,
-    SOUND_10_DEVICES
-};
-
 /* Sound channels */
 enum {
     SOUND_CHANNEL_1 = 1,
@@ -114,9 +100,10 @@ enum {
 
 #define SOUND_OUTPUT_CHANNELS_MAX 2
 
-#define SOUND_CHIP_CHANNELS_MAX 10
-
 /** \brief  Maximum number of SIDs supported by the emulation.
+ *
+ * The only place that sets it: everything that has one of something per SID
+ * (resources, options, I/O, mixing, snapshots, menus) follows it.
  */
 #define SOUND_SIDS_MAX 10
 
@@ -124,7 +111,14 @@ enum {
  *
  * Maximum number of SIDs for .psid files and thus VSID.
  */
-#define SOUND_SIDS_MAX_PSID 10
+#define SOUND_SIDS_MAX_PSID SOUND_SIDS_MAX
+
+/** \brief  Maximum number of channels of a sound chip
+ *
+ * Each SID is a channel of the SID sound chip, so it is at least the number
+ * of SIDs; it stays at least 10, as it was, for the other sound chips.
+ */
+#define SOUND_CHIP_CHANNELS_MAX ((SOUND_SIDS_MAX) > 10 ? (SOUND_SIDS_MAX) : 10)
 
 #define SOUND_CHIPS_MAX 20
 
