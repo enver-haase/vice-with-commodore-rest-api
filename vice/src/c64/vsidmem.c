@@ -986,40 +986,31 @@ static int mem_dump_io(void *context, uint16_t addr)
     return -1;
 }
 
+/* names of the further SIDs for the monitor, which keeps the pointers */
+static char sid_ioreg_names[SOUND_SIDS_MAX][8];
+
+/* the monitor calls it with the start address of the SID */
+static int vsid_sid_dump(void *context, uint16_t addr)
+{
+    return sid_dump_chip_nr(sid_get_chip_at(addr));
+}
+
 mem_ioreg_list_t *mem_ioreg_list_get(void *context)
 {
     mem_ioreg_list_t *mem_ioreg_list = NULL;
+    int chipno;
 
     mon_ioreg_add_list(&mem_ioreg_list, "SID", 0xd400, 0xd41f, mem_dump_io, NULL, IO_MIRROR_NONE);
     mon_ioreg_add_list(&mem_ioreg_list, "CIA1", 0xdc00, 0xdc0f, mem_dump_io, NULL, IO_MIRROR_NONE);
     mon_ioreg_add_list(&mem_ioreg_list, "CIA2", 0xdd00, 0xdd0f, mem_dump_io, NULL, IO_MIRROR_NONE);
 
-    if (sid_stereo >= 1) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID2", sid2_address_start, sid2_address_start + 0x1f, sid2_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 2) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID3", sid3_address_start, sid3_address_start + 0x1f, sid3_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 3) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID4", sid4_address_start, sid4_address_start + 0x1f, sid4_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 4) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID5", sid5_address_start, sid5_address_start + 0x1f, sid5_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 5) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID6", sid6_address_start, sid6_address_start + 0x1f, sid6_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 6) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID7", sid7_address_start, sid7_address_start + 0x1f, sid7_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 7) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID8", sid8_address_start, sid8_address_start + 0x1f, sid8_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 8) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID9", sid9_address_start, sid9_address_start + 0x1f, sid9_dump, NULL, IO_MIRROR_NONE);
-    }
-    if (sid_stereo >= 9) {
-        mon_ioreg_add_list(&mem_ioreg_list, "SID10", sid10_address_start, sid10_address_start + 0x1f, sid10_dump, NULL, IO_MIRROR_NONE);
+    for (chipno = 1; chipno <= sid_stereo && chipno < SOUND_SIDS_MAX; chipno++) {
+        if (sid_ioreg_names[chipno][0] == '\0') {
+            sprintf(sid_ioreg_names[chipno], "SID%d", chipno + 1);
+        }
+        mon_ioreg_add_list(&mem_ioreg_list, sid_ioreg_names[chipno],
+                           (int)sid_address_start[chipno], (int)sid_address_start[chipno] + 0x1f,
+                           vsid_sid_dump, NULL, IO_MIRROR_NONE);
     }
     return mem_ioreg_list;
 }
