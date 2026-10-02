@@ -12787,8 +12787,17 @@ Boolean specifying whether the built-in SID filters must be emulated.
 
 @vindex SidModel
 @item SidModel
-Integer specifying what model of the SID must be emulated.
+Integer specifying what model of the SID must be emulated; with more than
+one SID, the model of the first.
 (0: 6581, 1: 8580, 2: 8580D, 3: DTVSID)
+
+@vindex Sid@var{n}Model
+@item Sid@var{n}Model
+Integer specifying the model of SID number @var{n}, for each further SID:
+@var{n} counts from 2 up to the number of SIDs the machine supports, as for
+@code{Sid@var{n}AddressStart}. Used by the software SID engines
+(x64, x64sc, xscpu64, x128 and vsid only).
+(-1: same as the first SID, 0: 6581, 1: 8580, 2: 8580D)
 
 @vindex SidEngine
 @item SidEngine
@@ -13085,9 +13094,16 @@ Specify engine for the emulated SID chip
 
 @findex -sidmodel
 @item -sidmodel <model>
-Specify model for the emulated SID chip
+Specify model for the emulated SID chip, or the first of several
 (@code{SidModel}).
 (6581: 0, 8580: 1, ReSID 8580 + digiboost: 2, DTVSID: 3)
+
+@findex -sid@var{n}model
+@item -sid@var{n}model <model>
+Specify the model of SID chip number @var{n}, for each further SID,
+@var{n} counting from 2 (@code{Sid@var{n}Model})
+(x64, x64sc, xscpu64, x128 and vsid only).
+(same as the first SID: -1, 6581: 0, 8580: 1, 8580 + digiboost: 2)
 
 @findex -sidfilters, +sidfilters
 @item -sidfilters
