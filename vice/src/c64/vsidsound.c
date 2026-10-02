@@ -75,26 +75,13 @@ void sid_sound_chip_init(void)
 
 /* ---------------------------------------------------------------------*/
 
-#define SIDx_CHECK_RANGE(sid_nr)                                \
-    int machine_sid##sid_nr##_check_range(unsigned int sid_adr) \
-    {                                                           \
-        if (sid_adr >= 0xd400 && sid_adr <= 0xdfe0) {           \
-            sid##sid_nr##_address_start = sid_adr;              \
-            sid##sid_nr##_address_end = sid_adr + 0x1f;         \
-            return 0;                                           \
-        }                                                       \
-        return -1;                                              \
+int machine_sid_check_range(int chipno, unsigned int sid_adr)
+{
+    if (chipno >= 1 && chipno < SOUND_SIDS_MAX && sid_adr >= 0xd400 && sid_adr <= 0xdfe0) {
+        return 0;
     }
-
-SIDx_CHECK_RANGE(2)
-SIDx_CHECK_RANGE(3)
-SIDx_CHECK_RANGE(4)
-SIDx_CHECK_RANGE(5)
-SIDx_CHECK_RANGE(6)
-SIDx_CHECK_RANGE(7)
-SIDx_CHECK_RANGE(8)
-SIDx_CHECK_RANGE(9)
-SIDx_CHECK_RANGE(10)
+    return -1;
+}
 
 void machine_sid2_enable(int val)
 {

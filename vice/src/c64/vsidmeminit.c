@@ -74,15 +74,7 @@ const unsigned int c64meminit_io_config[32] = {
 
 uint8_t vsid_io_read(uint16_t addr)
 {
-    if (sid_stereo >= 1
-        && addr >= sid2_address_start
-        && addr < sid2_address_end) {
-        return sid_read(addr);
-    }
-
-    if (sid_stereo >= 2
-        && addr >= sid3_address_start
-        && addr < sid3_address_end) {
+    if (sid_get_chip_at(addr) > 0) {
         return sid_read(addr);
     }
 
@@ -91,15 +83,7 @@ uint8_t vsid_io_read(uint16_t addr)
 
 uint8_t vsid_io_peek(uint16_t addr)
 {
-    if (sid_stereo >= 1
-        && addr >= sid2_address_start
-        && addr < sid2_address_end) {
-        return sid_peek(addr);
-    }
-
-    if (sid_stereo >= 2
-        && addr >= sid3_address_start
-        && addr < sid3_address_end) {
+    if (sid_get_chip_at(addr) > 0) {
         return sid_peek(addr);
     }
 
@@ -108,15 +92,7 @@ uint8_t vsid_io_peek(uint16_t addr)
 
 void vsid_io_store(uint16_t addr, uint8_t val)
 {
-    if (sid_stereo >= 1
-        && addr >= sid2_address_start
-        && addr < sid2_address_end) {
-        sid_store(addr, val);
-    }
-
-    if (sid_stereo >= 2
-        && addr >= sid3_address_start
-        && addr < sid3_address_end) {
+    if (sid_get_chip_at(addr) > 0) {
         sid_store(addr, val);
     }
 }
