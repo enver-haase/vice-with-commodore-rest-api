@@ -52,18 +52,9 @@
  * $VICERES SidUSBSIDDiffSize           all
  * $VICERES SidUSBSIDBufferSize         all
  *
- * $VICERES Sid2AddressStart            all
- * $VICERES Sid3AddressStart            all
- *
- * $VICERES Sid4AddressStart            all
- * $VICERES Sid5AddressStart            all
- * $VICERES Sid6AddressStart            all
- * $VICERES Sid7AddressStart            all
- * $VICERES Sid8AddressStart            all
- * $VICERES Sid9AddressStart            all
- * $VICERES Sid10AddressStart            all
+ * $VICERES SidNAddressStart            all
  * $VICERES SidNModel                   all
- *          (N = 2 and up, one for each extra SID)
+ *          (both: N = 2 and up, one for each extra SID)
  */
 
 #include "vice.h"
@@ -324,10 +315,7 @@ static void update_sid_addresses_sensitivity(int count)
 {
     int n;
     if (sid_machine_can_have_multiple_sids()) {
-        gtk_widget_set_sensitive(address_widgets[0], count > 0);
-        gtk_widget_set_sensitive(address_widgets[1], count > 1);
-
-        for (n = 2; n < (SOUND_SIDS_MAX - 1); n++) {
+        for (n = 0; n < sid_machine_get_max_sids() - 1; n++) {
             gtk_widget_set_sensitive(address_widgets[n], count > n);
         }
     }
@@ -636,13 +624,8 @@ static GtkWidget *create_num_sids_widget(void)
     GtkWidget *grid;
     GtkWidget *label;
     GtkWidget *spin;
-    int        max_sids = SOUND_SIDS_MAX;
+    int        max_sids = sid_machine_get_max_sids();
 
-#if 0
-    if (machine_class == VICE_MACHINE_VSID) {
-        max_sids = SOUND_SIDS_MAX_PSID;
-    }
-#endif
     grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
 
