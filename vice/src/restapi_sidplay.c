@@ -63,6 +63,7 @@
 #include "restapi_http.h"
 #include "restapi_sidcrt.h"
 #include "restapi_sidplay.h"
+#include "sid/sid.h"
 #include "util.h"
 
 /** \brief  Largest SID file read: a header and 64KiB of data */
@@ -238,29 +239,49 @@ static void build_cartridge(unsigned char *image, const char *sslfile,
 /* ------------------------------------------------------------------------- */
 /* SID chips                                                                 */
 
+/** \brief  The VICE model for a model field of the flags
+ *
+ * \param[in]  field   two bits: 1 = 6581, 2 = 8580, 0 = unknown, 3 = either
+ * \param[in]  other   what to return for 0 and 3
+ */
+static int sid_model_of(int field, int other)
+{
+    switch (field) {
+        case 1:
+            return SID_MODEL_6581;
+        case 2:
+            return SID_MODEL_8580;
+        default:
+            return other;
+    }
+}
+
 /** \brief  Set up the SIDs the tune asks for, as ConfigSIDs() does
  *
- * The device maps its SIDs to the addresses in the header. VICE has one model
- * for all of its SIDs, so the first one's decides, as in vsid.
+ * The device maps its SIDs to the addresses in the header, each with the model
+ * the header asks for; one it leaves open gets the model of the first, as
+ * ConfigSIDs() does. A first one left open keeps the current SidModel.
  */
 static void configure_sids(void)
 {
     int count = 1;
-    int model = (tune.flags >> 4) & 3;     /* 1 = 6581, 2 = 8580, else either */
+    int model = sid_model_of((tune.flags >> 4) & 3, -1);
 
     if (tune.header_version >= 2) {
         if (tune.header_version >= 3 && tune.header[0x7a]) {
             resources_set_int("Sid2AddressStart", 0xd000 | (tune.header[0x7a] << 4));
+            resources_set_int("Sid2Model",
+                              sid_model_of((tune.flags >> 6) & 3, SID_MODEL_SAME_AS_FIRST));
             count = 2;
         }
         if (tune.header_version >= 4 && tune.header[0x7b]) {
             resources_set_int("Sid3AddressStart", 0xd000 | (tune.header[0x7b] << 4));
+            resources_set_int("Sid3Model",
+                              sid_model_of((tune.flags >> 8) & 3, SID_MODEL_SAME_AS_FIRST));
             count = 3;
         }
-        if (model == 1) {
-            resources_set_int("SidModel", 0);
-        } else if (model == 2) {
-            resources_set_int("SidModel", 1);
+        if (model >= 0) {
+            resources_set_int("SidModel", model);
         }
     }
     resources_set_int("SidStereo", count - 1);

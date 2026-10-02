@@ -180,10 +180,11 @@ lengths come from `SONGLENGTHS/<name>.ssl` next to the file, as on the device,
 or from a second uploaded file on `POST`. The player is GPLv3, where VICE is GPLv2
 or later, so this part cannot go upstream.
 
-The device maps its SIDs to the addresses the tune asks for; VICE sets
-`SidStereo` and `Sid2AddressStart`/`Sid3AddressStart` accordingly, and
-`SidModel` from the first SID's model, since all of VICE's SIDs share one. These
-settings stay as the tune left them.
+The device maps its SIDs to the addresses the tune asks for, each with the model
+the tune asks for; VICE sets `SidStereo`, `Sid2AddressStart`/`Sid3AddressStart`
+and `SidModel`/`Sid2Model`/`Sid3Model` accordingly. A further SID whose model the
+tune leaves open gets the first one's, as on the device. These settings stay as
+the tune left them.
 
 `GET /v1/drives` folds VICE's drive models into the API's vocabulary: 1540, 1541,
 1541-II and 1551 report as `1541`, the 1570/1571 family as `1571`, the 1581 as
