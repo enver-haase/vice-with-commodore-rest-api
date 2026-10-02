@@ -307,6 +307,8 @@ static GtkWidget *num_sids_widget;
  */
 static GtkWidget *address_widgets[SOUND_SIDS_MAX];
 
+static void update_filter_widgets(void);
+
 /** \brief  Set sensitivity of SID address widgets based on number of SIDs
  *
  * \param[in]   count   number of enabled SIDs
@@ -331,6 +333,7 @@ static void on_sid_count_changed(GtkWidget *widget, gpointer data)
     int count = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(widget));
 
     update_sid_addresses_sensitivity(count);
+    update_filter_widgets();
 }
 #endif
 
@@ -356,6 +359,53 @@ static GtkWidget *create_residfp_sampling_widget(void);
  * \param[in]   engine  SID engine ID
  * \param[in]   model   SID model ID
  */
+/** \brief  Show the filter settings of each model the active SIDs use
+ *
+ * With SIDs of both models, both the 6581 and the 8580 settings show.
+ */
+static void update_filter_widgets(void)
+{
+    int engine = 0;
+    int stereo = 0;
+    int chipno;
+    gboolean has_6581 = FALSE;
+    gboolean has_8580 = FALSE;
+
+    resources_get_int("SidEngine", &engine);
+    if (resources_get_int("SidStereo", &stereo) < 0) {
+        stereo = 0;
+    }
+    for (chipno = 0; chipno <= stereo && chipno < SOUND_SIDS_MAX; chipno++) {
+        if (sid_get_chip_model(chipno) == SID_MODEL_6581) {
+            has_6581 = TRUE;
+        } else {
+            has_8580 = TRUE;
+        }
+    }
+#ifdef HAVE_RESID
+    if (resid_6581_grid != NULL) {
+        gtk_widget_set_visible(resid_6581_grid, engine == SID_ENGINE_RESID && has_6581);
+        gtk_widget_set_visible(resid_8580_grid, engine == SID_ENGINE_RESID && has_8580);
+    }
+#endif
+#ifdef HAVE_RESIDFP
+    if (residfp_6581_grid != NULL) {
+        gtk_widget_set_visible(residfp_6581_grid, engine == SID_ENGINE_RESIDFP && has_6581);
+        gtk_widget_set_visible(residfp_8580_grid, engine == SID_ENGINE_RESIDFP && has_8580);
+    }
+#endif
+}
+
+/** \brief  Extra callback registered to the model widget of each further SID
+ *
+ * \param[in]   widget  combo box (unused)
+ * \param[in]   data    unused
+ */
+static void on_sid_chip_model_changed(GtkWidget *widget, gpointer data)
+{
+    update_filter_widgets();
+}
+
 static void engine_model_changed_callback(int engine, int model)
 {
     gboolean is_fastsid = (engine == SID_ENGINE_FASTSID);
@@ -382,23 +432,11 @@ static void engine_model_changed_callback(int engine, int model)
 
     if (is_residfp) {
 #ifdef HAVE_RESIDFP
-        if (model == SID_MODEL_6581) {
-            gtk_widget_show(residfp_6581_grid);
-        } else {
-            gtk_widget_show(residfp_8580_grid);
-        }
         gtk_widget_show(chip_profile);
         gtk_widget_show(chip_profile_label);
 #endif
-    } else if (is_resid) {
-#ifdef HAVE_RESID
-        if (model == SID_MODEL_6581) {
-            gtk_widget_show(resid_6581_grid);
-        } else {
-            gtk_widget_show(resid_8580_grid);
-        }
-#endif
     }
+    update_filter_widgets();
 
     /* Update mixer widget in the statusbar */
     mixer_widget_sid_type_changed();
@@ -679,6 +717,8 @@ static GtkWidget *create_extra_sid_address_widget(int sid)
                                                      sid + 1);
     gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(grid), combo, 1, 0, 1, 1);
+    g_signal_connect_after(G_OBJECT(model), "changed",
+                           G_CALLBACK(on_sid_chip_model_changed), NULL);
     gtk_grid_attach(GTK_GRID(grid), model, 1, 1, 1, 1);
     return grid;
 }
@@ -1005,11 +1045,9 @@ GtkWidget *sid_sound_widget_create(void)
     GtkWidget *engine;
     int        row = 0;
     int        current_engine = 0;
-    int        current_model  = 0;
     int        current_stereo = 0;
 
     resources_get_int("SidEngine", &current_engine);
-    resources_get_int("SidModel",  &current_model);
     resources_get_int("SidStereo", &current_stereo);
 
     sid_grid = grid = vice_gtk3_grid_new_spaced(8, 0);
@@ -1101,18 +1139,6 @@ GtkWidget *sid_sound_widget_create(void)
     gtk_widget_set_no_show_all(resid_8580_grid, TRUE);
     gtk_widget_set_sensitive(resid_6581_grid, current_engine == SID_ENGINE_RESID);
     gtk_widget_set_sensitive(resid_8580_grid, current_engine == SID_ENGINE_RESID);
-    if (current_engine == SID_ENGINE_RESID) {
-        if (current_model == SID_MODEL_6581) {
-            gtk_widget_show(resid_6581_grid);
-            gtk_widget_hide(resid_8580_grid);
-        } else {
-            gtk_widget_hide(resid_6581_grid);
-            gtk_widget_show(resid_8580_grid);
-        }
-    } else {
-        gtk_widget_hide(resid_6581_grid);
-        gtk_widget_hide(resid_8580_grid);
-    }
 #endif
 
 #ifdef HAVE_RESIDFP
@@ -1143,19 +1169,10 @@ GtkWidget *sid_sound_widget_create(void)
     gtk_widget_set_sensitive(residfp_8580_grid, current_engine == SID_ENGINE_RESIDFP);
 
     if (current_engine == SID_ENGINE_RESIDFP) {
-        if (current_model == SID_MODEL_6581) {
-            gtk_widget_show(residfp_6581_grid);
-            gtk_widget_hide(residfp_8580_grid);
-        } else {
-            gtk_widget_hide(residfp_6581_grid);
-            gtk_widget_show(residfp_8580_grid);
-        }
         gtk_widget_show(residfp_oldcaps);
         gtk_widget_show(chip_profile);
         gtk_widget_show(chip_profile_label);
     } else {
-        gtk_widget_hide(residfp_6581_grid);
-        gtk_widget_hide(residfp_8580_grid);
         gtk_widget_hide(residfp_oldcaps);
         gtk_widget_hide(chip_profile);
         gtk_widget_hide(chip_profile_label);
@@ -1189,5 +1206,6 @@ GtkWidget *sid_sound_widget_create(void)
 #endif
 
     gtk_widget_show_all(grid);
+    update_filter_widgets();
     return grid;
 }
