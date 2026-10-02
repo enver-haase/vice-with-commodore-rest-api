@@ -31,274 +31,88 @@
 
 #include "cartio.h"
 #include "cartridge.h"
+#include "lib.h"
 #include "machine.h"
 #include "sid.h"
 #include "sid-resources.h"
 #include "sound.h"
 #include "types.h"
 
-#define MACHINE_SIDx_RFUNC(fname, func)  \
-    static uint8_t fname(uint16_t addr) \
-    {                                   \
-        return func(addr);              \
-    }
-
-MACHINE_SIDx_RFUNC(machine_sid2_read, sid2_read)
-MACHINE_SIDx_RFUNC(machine_sid3_read, sid3_read)
-MACHINE_SIDx_RFUNC(machine_sid4_read, sid4_read)
-MACHINE_SIDx_RFUNC(machine_sid5_read, sid5_read)
-MACHINE_SIDx_RFUNC(machine_sid6_read, sid6_read)
-MACHINE_SIDx_RFUNC(machine_sid7_read, sid7_read)
-MACHINE_SIDx_RFUNC(machine_sid8_read, sid8_read)
-MACHINE_SIDx_RFUNC(machine_sid9_read, sid9_read)
-MACHINE_SIDx_RFUNC(machine_sid10_read, sid10_read)
-
-MACHINE_SIDx_RFUNC(machine_sid2_peek, sid2_peek)
-MACHINE_SIDx_RFUNC(machine_sid3_peek, sid3_peek)
-MACHINE_SIDx_RFUNC(machine_sid4_peek, sid4_peek)
-MACHINE_SIDx_RFUNC(machine_sid5_peek, sid5_peek)
-MACHINE_SIDx_RFUNC(machine_sid6_peek, sid6_peek)
-MACHINE_SIDx_RFUNC(machine_sid7_peek, sid7_peek)
-MACHINE_SIDx_RFUNC(machine_sid8_peek, sid8_peek)
-MACHINE_SIDx_RFUNC(machine_sid9_peek, sid9_peek)
-MACHINE_SIDx_RFUNC(machine_sid10_peek, sid10_peek)
-
-#define MACHINE_SIDx_STORE(fname, func)            \
-    static void fname(uint16_t addr, uint8_t byte) \
-    {                                              \
-        func(addr, byte);                          \
-    }
-
-MACHINE_SIDx_STORE(machine_sid2_store, sid2_store)
-MACHINE_SIDx_STORE(machine_sid3_store, sid3_store)
-MACHINE_SIDx_STORE(machine_sid4_store, sid4_store)
-MACHINE_SIDx_STORE(machine_sid5_store, sid5_store)
-MACHINE_SIDx_STORE(machine_sid6_store, sid6_store)
-MACHINE_SIDx_STORE(machine_sid7_store, sid7_store)
-MACHINE_SIDx_STORE(machine_sid8_store, sid8_store)
-MACHINE_SIDx_STORE(machine_sid9_store, sid9_store)
-MACHINE_SIDx_STORE(machine_sid10_store, sid10_store)
-
 /* ---------------------------------------------------------------------*/
 
-/* 2nd SID, can be a cartridge or an internal board */
-static io_source_t sid2_device = {
-    "Stereo SID",         /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xde00, 0xde1f, 0x1f, /* range for the 2nd SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid2_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid2_read,    /* read function */
-    machine_sid2_peek,    /* peek function */
-    sid2_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+/* The further SIDs, #2 and up, each an I/O device, can be cartridges or
+   internal boards. They share their functions, which find the SID by the
+   address: their address mask passes the whole of it. Index 0 is unused. */
+static io_source_t sid_device[SOUND_SIDS_MAX];
+static io_source_list_t *sid_list_item[SOUND_SIDS_MAX];
 
-/* 3rd SID, can be a cartridge or an internal board */
-static io_source_t sid3_device = {
-    "Triple SID",         /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xdf00, 0xdf1f, 0x1f, /* range for the 3rd SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid3_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid3_read,    /* read function */
-    machine_sid3_peek,    /* peek function */
-    sid3_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+static int sid_io_chip(uint16_t addr)
+{
+    int chipno;
 
-/* 4th SID, can be a cartridge or an internal board */
-static io_source_t sid4_device = {
-    "Quad SID",           /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xdf80, 0xdf9f, 0x1f, /* range for the 4th SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid4_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid4_read,    /* read function */
-    machine_sid4_peek,    /* peek function */
-    sid4_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+    for (chipno = 1; chipno < SOUND_SIDS_MAX; chipno++) {
+        if (addr >= sid_device[chipno].start_address
+            && addr <= sid_device[chipno].end_address) {
+            return chipno;
+        }
+    }
+    return 0;
+}
 
-/* 5th SID, can be a cartridge or an internal board */
-static io_source_t sid5_device = {
-    "Penta SID",          /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xde80, 0xde9f, 0x1f, /* range for the 5th SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid5_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid5_read,    /* read function */
-    machine_sid5_peek,    /* peek function */
-    sid5_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+static uint8_t sid_io_read(uint16_t addr)
+{
+    return sid_read_chip_nr(addr, sid_io_chip(addr));
+}
 
-/* 6th SID, can be a cartridge or an internal board */
-static io_source_t sid6_device = {
-    "Hexa SID",           /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xdf40, 0xdf5f, 0x1f, /* range for the 6th SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid6_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid6_read,    /* read function */
-    machine_sid6_peek,    /* peek function */
-    sid6_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+static uint8_t sid_io_peek(uint16_t addr)
+{
+    return sid_peek_chip_nr(addr, sid_io_chip(addr));
+}
 
-/* 7th SID, can be a cartridge or an internal board */
-static io_source_t sid7_device = {
-    "Hepta SID",          /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xde40, 0xde5f, 0x1f, /* range for the 6th SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid7_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid7_read,    /* read function */
-    machine_sid7_peek,    /* peek function */
-    sid7_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+static void sid_io_store(uint16_t addr, uint8_t byte)
+{
+    sid_store_chip_nr(addr, byte, sid_io_chip(addr));
+}
 
-/* 8th SID, can be a cartridge or an internal board */
-static io_source_t sid8_device = {
-    "Octa SID",           /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xdfc0, 0xdfdf, 0x1f, /* range for the 6th SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid8_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid8_read,    /* read function */
-    machine_sid8_peek,    /* peek function */
-    sid8_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+/* the monitor calls it with the start address of the device */
+static int sid_io_dump(void *context, uint16_t addr)
+{
+    return sid_dump_chip_nr(sid_io_chip(addr));
+}
 
-/* 9th SID, can be a cartridge or an internal board */
-static io_source_t sid9_device = {
-    "Nona SID",           /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xde20, 0xde3f, 0x1f, /* range for the 6th SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid9_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid9_read,    /* read function */
-    machine_sid9_peek,    /* peek function */
-    sid9_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
+static void sid_devices_init(void)
+{
+    int chipno;
 
-/* 10th SID, can be a cartridge or an internal board */
-static io_source_t sid10_device = {
-    "Deca SID",           /* name of the device */
-    IO_DETACH_RESOURCE,   /* use resource to detach the device when involved in a read-collision */
-    "SidStereo",          /* resource to set to '0' */
-    0xdf20, 0xdf3f, 0x1f, /* range for the 6th SID device, can be changed to other ranges */
-    1,                    /* read is always valid */
-    machine_sid10_store,   /* store function */
-    NULL,                 /* NO poke function */
-    machine_sid10_read,    /* read function */
-    machine_sid10_peek,    /* peek function */
-    sid10_dump,            /* device state information dump function */
-    IO_CART_ID_NONE,      /* none is used here, because it is an I/O only device */
-    IO_PRIO_NORMAL,       /* normal priority, device read needs to be checked for collisions */
-    0,                    /* insertion order, gets filled in by the registration function */
-    IO_MIRROR_NONE        /* NO mirroring */
-};
-
-static io_source_list_t *sid2_list_item = NULL;
-static io_source_list_t *sid3_list_item = NULL;
-static io_source_list_t *sid4_list_item = NULL;
-static io_source_list_t *sid5_list_item = NULL;
-static io_source_list_t *sid6_list_item = NULL;
-static io_source_list_t *sid7_list_item = NULL;
-static io_source_list_t *sid8_list_item = NULL;
-static io_source_list_t *sid9_list_item = NULL;
-static io_source_list_t *sid10_list_item = NULL;
+    for (chipno = 1; chipno < SOUND_SIDS_MAX; chipno++) {
+        if (sid_device[chipno].name != NULL) {
+            continue;
+        }
+        sid_device[chipno].name = lib_msprintf("SID #%d", chipno + 1);
+        sid_device[chipno].detach_id = IO_DETACH_RESOURCE;   /* on a read-collision, */
+        sid_device[chipno].resource_name = "SidStereo";      /* set it to 0 */
+        sid_device[chipno].start_address = 0xde00;           /* moved by machine_sid_check_range() */
+        sid_device[chipno].end_address = 0xde1f;
+        sid_device[chipno].address_mask = 0xffff;            /* the functions need the whole address */
+        sid_device[chipno].io_source_valid = 1;
+        sid_device[chipno].store = sid_io_store;
+        sid_device[chipno].read = sid_io_read;
+        sid_device[chipno].peek = sid_io_peek;
+        /* the field's type takes no arguments, but the monitor calls it with
+           (context, address), through void (*)(void) as the generic type */
+        sid_device[chipno].dump = (int (*)(void))(void (*)(void))sid_io_dump;
+        sid_device[chipno].cart_id = IO_CART_ID_NONE;
+        sid_device[chipno].io_source_prio = IO_PRIO_NORMAL;
+        sid_device[chipno].mirror_mode = IO_MIRROR_NONE;
+    }
+}
 
 /* ---------------------------------------------------------------------*/
 
 #ifdef SOUND_SYSTEM_FLOAT
 /* stereo mixing placement of the C64 SID sound */
-static sound_chip_mixing_spec_t sid_sound_mixing_spec[SOUND_CHIP_CHANNELS_MAX] = {
-    {
-        100, /* SID 1 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 1 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 2 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 2 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 3 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 3 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 4 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 4 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 5 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 5 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 6 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 6 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 7 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 7 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 8 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 8 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 9 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 9 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    },
-    {
-        100, /* SID 10 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-        100, /* SID 10 left channel volume % in case of stereo output, default output to both, activating more sids changes this */
-    }
-};
+/* stereo mixing placement of the C64 SID sound, set by machine_sid2_enable() */
+static sound_chip_mixing_spec_t sid_sound_mixing_spec[SOUND_CHIP_CHANNELS_MAX];
 #endif
 
 /* C64 SID sound chip */
@@ -322,229 +136,77 @@ static uint16_t sid_sound_chip_offset = 0;
 
 void sid_sound_chip_init(void)
 {
+#ifdef SOUND_SYSTEM_FLOAT
+    int chipno;
+
+    /* all on both sides until machine_sid2_enable() sets them */
+    for (chipno = 0; chipno < SOUND_CHIP_CHANNELS_MAX; chipno++) {
+        sid_sound_mixing_spec[chipno].left_channel_volume = 100;
+        sid_sound_mixing_spec[chipno].right_channel_volume = 100;
+    }
+#endif
+    sid_devices_init();
     sid_sound_chip_offset = sound_chip_register(&sid_sound_chip);
 }
 
 /* ---------------------------------------------------------------------*/
 
-#define SIDx_CHECK_RANGE(sid_nr)                                                                        \
-    int machine_sid##sid_nr##_check_range(unsigned int sid_adr)                                         \
-    {                                                                                                   \
-        if (machine_class == VICE_MACHINE_C128) {                                                       \
-            if ((sid_adr >= 0xd400 && sid_adr <= 0xd4e0) || (sid_adr >= 0xd700 && sid_adr <= 0xdfe0)) { \
-                sid##sid_nr##_address_start = sid_adr;                                                  \
-                sid##sid_nr##_device.start_address = sid_adr;                                           \
-                sid##sid_nr##_address_end = sid_adr + 0x1f;                                             \
-                sid##sid_nr##_device.end_address = sid_adr + 0x1f;                                      \
-                if (sid_adr >= 0xd400 && sid_adr <= 0xd4e0) {                                           \
-                    sid##sid_nr##_device.io_source_prio = IO_PRIO_HIGH;                                 \
-                } else {                                                                                \
-                    sid##sid_nr##_device.io_source_prio = IO_PRIO_NORMAL;                               \
-                }                                                                                       \
-                if (sid##sid_nr##_list_item != NULL) {                                                  \
-                    io_source_unregister(sid##sid_nr##_list_item);                                      \
-                    sid##sid_nr##_list_item = io_source_register(&sid##sid_nr##_device);                \
-                } else {                                                                                \
-                    if (sid_stereo >= sid_nr - 1) {                                                     \
-                        sid##sid_nr##_list_item = io_source_register(&sid##sid_nr##_device);            \
-                    }                                                                                   \
-                }                                                                                       \
-                return 0;                                                                               \
-            }                                                                                           \
-        } else {                                                                                        \
-            if (sid_adr >= 0xd400 && sid_adr <= 0xdfe0) {                                               \
-                sid##sid_nr##_address_start = sid_adr;                                                  \
-                sid##sid_nr##_device.start_address = sid_adr;                                           \
-                sid##sid_nr##_address_end = sid_adr + 0x1f;                                             \
-                sid##sid_nr##_device.end_address = sid_adr + 0x1f;                                      \
-                if (sid_adr >= 0xd400 && sid_adr <= 0xd7e0) {                                           \
-                    sid##sid_nr##_device.io_source_prio = IO_PRIO_HIGH;                                 \
-                } else {                                                                                \
-                    sid##sid_nr##_device.io_source_prio = IO_PRIO_NORMAL;                               \
-                }                                                                                       \
-                if (sid##sid_nr##_list_item != NULL) {                                                  \
-                    io_source_unregister(sid##sid_nr##_list_item);                                      \
-                    sid##sid_nr##_list_item = io_source_register(&sid##sid_nr##_device);                \
-                } else {                                                                                \
-                    if (sid_stereo >= sid_nr - 1) {                                                     \
-                        sid##sid_nr##_list_item = io_source_register(&sid##sid_nr##_device);            \
-                    }                                                                                   \
-                }                                                                                       \
-                return 0;                                                                               \
-            }                                                                                           \
-        }                                                                                               \
-        return -1;                                                                                      \
+int machine_sid_check_range(int chipno, unsigned int sid_adr)
+{
+    int high;
+
+    if (chipno < 1 || chipno >= SOUND_SIDS_MAX) {
+        return -1;
+    }
+    if (machine_class == VICE_MACHINE_C128) {
+        if (!((sid_adr >= 0xd400 && sid_adr <= 0xd4e0) || (sid_adr >= 0xd700 && sid_adr <= 0xdfe0))) {
+            return -1;
+        }
+        high = (sid_adr >= 0xd400 && sid_adr <= 0xd4e0);
+    } else {
+        if (!(sid_adr >= 0xd400 && sid_adr <= 0xdfe0)) {
+            return -1;
+        }
+        high = (sid_adr >= 0xd400 && sid_adr <= 0xd7e0);
     }
 
-SIDx_CHECK_RANGE(2)
-SIDx_CHECK_RANGE(3)
-SIDx_CHECK_RANGE(4)
-SIDx_CHECK_RANGE(5)
-SIDx_CHECK_RANGE(6)
-SIDx_CHECK_RANGE(7)
-SIDx_CHECK_RANGE(8)
-SIDx_CHECK_RANGE(9)
-SIDx_CHECK_RANGE(10)
+    sid_devices_init();
+    sid_device[chipno].start_address = (uint16_t)sid_adr;
+    sid_device[chipno].end_address = (uint16_t)(sid_adr + 0x1f);
+    sid_device[chipno].io_source_prio = high ? IO_PRIO_HIGH : IO_PRIO_NORMAL;
+    if (sid_list_item[chipno] != NULL) {
+        io_source_unregister(sid_list_item[chipno]);
+        sid_list_item[chipno] = io_source_register(&sid_device[chipno]);
+    } else if (sid_stereo >= chipno) {
+        sid_list_item[chipno] = io_source_register(&sid_device[chipno]);
+    }
+    return 0;
+}
 
 void machine_sid2_enable(int val)
 {
-    if (sid2_list_item != NULL) {
-        io_source_unregister(sid2_list_item);
-        sid2_list_item = NULL;
-    }
-    if (sid3_list_item != NULL) {
-        io_source_unregister(sid3_list_item);
-        sid3_list_item = NULL;
-    }
-    if (sid4_list_item != NULL) {
-        io_source_unregister(sid4_list_item);
-        sid4_list_item = NULL;
-    }
-    if (sid5_list_item != NULL) {
-        io_source_unregister(sid5_list_item);
-        sid5_list_item = NULL;
-    }
-    if (sid6_list_item != NULL) {
-        io_source_unregister(sid6_list_item);
-        sid6_list_item = NULL;
-    }
-    if (sid7_list_item != NULL) {
-        io_source_unregister(sid7_list_item);
-        sid7_list_item = NULL;
-    }
-    if (sid8_list_item != NULL) {
-        io_source_unregister(sid8_list_item);
-        sid8_list_item = NULL;
-    }
-    if (sid9_list_item != NULL) {
-        io_source_unregister(sid9_list_item);
-        sid9_list_item = NULL;
-    }
-    if (sid10_list_item != NULL) {
-        io_source_unregister(sid10_list_item);
-        sid10_list_item = NULL;
-    }
+    int chipno;
 
-    if (val >= 1) {
-        sid2_list_item = io_source_register(&sid2_device);
+    sid_devices_init();
+    for (chipno = 1; chipno < SOUND_SIDS_MAX; chipno++) {
+        if (sid_list_item[chipno] != NULL) {
+            io_source_unregister(sid_list_item[chipno]);
+            sid_list_item[chipno] = NULL;
+        }
     }
-    if (val >= 2) {
-        sid3_list_item = io_source_register(&sid3_device);
-    }
-    if (val >= 3) {
-        sid4_list_item = io_source_register(&sid4_device);
-    }
-    if (val >= 4) {
-        sid5_list_item = io_source_register(&sid5_device);
-    }
-    if (val >= 5) {
-        sid6_list_item = io_source_register(&sid6_device);
-    }
-    if (val >= 6) {
-        sid7_list_item = io_source_register(&sid7_device);
-    }
-    if (val >= 7) {
-        sid8_list_item = io_source_register(&sid8_device);
-    }
-    if (val >= 8) {
-        sid9_list_item = io_source_register(&sid9_device);
-    }
-    if (val >= 9) {
-        sid10_list_item = io_source_register(&sid10_device);
+    for (chipno = 1; chipno <= val && chipno < SOUND_SIDS_MAX; chipno++) {
+        sid_list_item[chipno] = io_source_register(&sid_device[chipno]);
     }
 
 #ifdef SOUND_SYSTEM_FLOAT
-    /* set stereo rendering preferences */
-    switch (val) {
-        /* FIXME: 9,10 chips */
-        case 8:   /* 8 SID chips, 0/2/4/6 left only, 1/3/5/7 right only */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 0;
-            sid_sound_mixing_spec[2].left_channel_volume = 100;
-            sid_sound_mixing_spec[2].right_channel_volume = 0;
-            sid_sound_mixing_spec[4].left_channel_volume = 100;
-            sid_sound_mixing_spec[4].right_channel_volume = 0;
-            sid_sound_mixing_spec[6].left_channel_volume = 100;
-            sid_sound_mixing_spec[6].right_channel_volume = 0;
-            sid_sound_mixing_spec[1].left_channel_volume = 0;
-            sid_sound_mixing_spec[1].right_channel_volume = 100;
-            sid_sound_mixing_spec[3].left_channel_volume = 0;
-            sid_sound_mixing_spec[3].right_channel_volume = 100;
-            sid_sound_mixing_spec[5].left_channel_volume = 0;
-            sid_sound_mixing_spec[5].right_channel_volume = 100;
-            sid_sound_mixing_spec[7].left_channel_volume = 0;
-            sid_sound_mixing_spec[7].right_channel_volume = 100;
-            break;
-        case 7:   /* 7 SID chips, 0/2/4 left only, 1/3/5 right only, 6 both */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 0;
-            sid_sound_mixing_spec[2].left_channel_volume = 100;
-            sid_sound_mixing_spec[2].right_channel_volume = 0;
-            sid_sound_mixing_spec[4].left_channel_volume = 100;
-            sid_sound_mixing_spec[4].right_channel_volume = 0;
-            sid_sound_mixing_spec[1].left_channel_volume = 0;
-            sid_sound_mixing_spec[1].right_channel_volume = 100;
-            sid_sound_mixing_spec[3].left_channel_volume = 0;
-            sid_sound_mixing_spec[3].right_channel_volume = 100;
-            sid_sound_mixing_spec[5].left_channel_volume = 0;
-            sid_sound_mixing_spec[5].right_channel_volume = 100;
-            sid_sound_mixing_spec[6].left_channel_volume = 100;
-            sid_sound_mixing_spec[6].right_channel_volume = 100;
-            break;
-        case 6:   /* 6 SID chips, 0/2/4 left only, 1/3/5 right only */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 0;
-            sid_sound_mixing_spec[2].left_channel_volume = 100;
-            sid_sound_mixing_spec[2].right_channel_volume = 0;
-            sid_sound_mixing_spec[4].left_channel_volume = 100;
-            sid_sound_mixing_spec[4].right_channel_volume = 0;
-            sid_sound_mixing_spec[1].left_channel_volume = 0;
-            sid_sound_mixing_spec[1].right_channel_volume = 100;
-            sid_sound_mixing_spec[3].left_channel_volume = 0;
-            sid_sound_mixing_spec[3].right_channel_volume = 100;
-            sid_sound_mixing_spec[5].left_channel_volume = 0;
-            sid_sound_mixing_spec[5].right_channel_volume = 100;
-            break;
-        case 5:   /* 5 SID chips, 0/2 left only, 1/3 right only, 4 both */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 0;
-            sid_sound_mixing_spec[2].left_channel_volume = 100;
-            sid_sound_mixing_spec[2].right_channel_volume = 0;
-            sid_sound_mixing_spec[1].left_channel_volume = 0;
-            sid_sound_mixing_spec[1].right_channel_volume = 100;
-            sid_sound_mixing_spec[3].left_channel_volume = 0;
-            sid_sound_mixing_spec[3].right_channel_volume = 100;
-            sid_sound_mixing_spec[4].left_channel_volume = 100;
-            sid_sound_mixing_spec[4].right_channel_volume = 100;
-            break;
-        case 4:   /* 4 SID chips, 0/2 left only, 1/3 right only */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 0;
-            sid_sound_mixing_spec[2].left_channel_volume = 100;
-            sid_sound_mixing_spec[2].right_channel_volume = 0;
-            sid_sound_mixing_spec[1].left_channel_volume = 0;
-            sid_sound_mixing_spec[1].right_channel_volume = 100;
-            sid_sound_mixing_spec[3].left_channel_volume = 0;
-            sid_sound_mixing_spec[3].right_channel_volume = 100;
-            break;
-        case 3:   /* 3 SID chips, 0 left only, 1 right only, 2 both */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 0;
-            sid_sound_mixing_spec[1].left_channel_volume = 0;
-            sid_sound_mixing_spec[1].right_channel_volume = 100;
-            sid_sound_mixing_spec[2].left_channel_volume = 100;
-            sid_sound_mixing_spec[2].right_channel_volume = 100;
-            break;
-        case 2:   /* 2 SID chips, 0 left only, 1 right only */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 0;
-            sid_sound_mixing_spec[1].left_channel_volume = 0;
-            sid_sound_mixing_spec[1].right_channel_volume = 100;
-            break;
-        case 1:   /* 1 SID chip, mix on both */
-            sid_sound_mixing_spec[0].left_channel_volume = 100;
-            sid_sound_mixing_spec[0].right_channel_volume = 100;
-            break;
+    /* set stereo rendering preferences: one SID on both sides; of several,
+       the even ones left, the odd ones right, and with an odd count the last
+       one on both */
+    for (chipno = 0; chipno <= val && chipno < SOUND_SIDS_MAX; chipno++) {
+        int both = (val == 0) || ((val & 1) == 0 && chipno == val);
+
+        sid_sound_mixing_spec[chipno].left_channel_volume = ((chipno & 1) == 0 || both) ? 100 : 0;
+        sid_sound_mixing_spec[chipno].right_channel_volume = ((chipno & 1) == 1 || both) ? 100 : 0;
     }
 #endif
 }
