@@ -89,24 +89,8 @@ static int sid_residfp_combined_waveform_strength;
 #endif
 int sid_stereo = 0;
 int checking_sid_stereo;
-unsigned int sid2_address_start;
-unsigned int sid2_address_end;
-unsigned int sid3_address_start;
-unsigned int sid3_address_end;
-unsigned int sid4_address_start;
-unsigned int sid4_address_end;
-unsigned int sid5_address_start;
-unsigned int sid5_address_end;
-unsigned int sid6_address_start;
-unsigned int sid6_address_end;
-unsigned int sid7_address_start;
-unsigned int sid7_address_end;
-unsigned int sid8_address_start;
-unsigned int sid8_address_end;
-unsigned int sid9_address_start;
-unsigned int sid9_address_end;
-unsigned int sid10_address_start;
-unsigned int sid10_address_end;
+unsigned int sid_address_start[SOUND_SIDS_MAX];
+unsigned int sid_address_end[SOUND_SIDS_MAX];
 static int sid_engine;
 #ifdef HAVE_HARDSID
 static int sid_hardsid_main;
@@ -222,31 +206,60 @@ static int set_sid_stereo(int val, void *param)
     return 0;
 }
 
-#define SET_SIDx_ADDRESS(sid_nr)                                        \
-    int sid_set_sid##sid_nr##_address(int val, void *param)             \
-    {                                                                   \
-        unsigned int sid_adr;                                           \
-                                                                        \
-        sid_adr = (unsigned int)val;                                    \
-                                                                        \
-        if (machine_sid##sid_nr##_check_range(sid_adr) < 0) {           \
-            return -1;                                                  \
-        }                                                               \
-                                                                        \
-        sid##sid_nr##_address_start = sid_adr;                          \
-        sid##sid_nr##_address_end = sid##sid_nr##_address_start + 0x20; \
-        return 0;                                                       \
+static int set_sid_address(int val, void *param)
+{
+    int chipno = vice_ptr_to_int(param);
+    unsigned int sid_adr = (unsigned int)val;
+
+    if (machine_sid_check_range(chipno, sid_adr) < 0) {
+        return -1;
     }
 
-SET_SIDx_ADDRESS(2)
-SET_SIDx_ADDRESS(3)
-SET_SIDx_ADDRESS(4)
-SET_SIDx_ADDRESS(5)
-SET_SIDx_ADDRESS(6)
-SET_SIDx_ADDRESS(7)
-SET_SIDx_ADDRESS(8)
-SET_SIDx_ADDRESS(9)
-SET_SIDx_ADDRESS(10)
+    sid_address_start[chipno] = sid_adr;
+    sid_address_end[chipno] = sid_adr + 0x20;
+    return 0;
+}
+
+/** \brief  Get the default base address of a further SID
+ *
+ * SIDs #2 to #10 keep the defaults they always had; any further one takes the
+ * next free slot, in $DExx/$DFxx first, then $D7xx and $D4xx, which are valid
+ * on both the C64 and the C128.
+ *
+ * \param[in]  chipno  number of the SID, 1 for the second
+ *
+ * \return  base address
+ */
+static unsigned int sid_default_address(int chipno)
+{
+    static const unsigned int known[] = {
+        0xde00, 0xdf00, 0xdf80, 0xde80, 0xdf40, 0xde40, 0xdfc0, 0xde20, 0xdf20
+    };
+    static const unsigned int areas[][2] = {
+        { 0xde00, 0xdfe0 }, { 0xd700, 0xd7e0 }, { 0xd420, 0xd4e0 }
+    };
+    int n = chipno - 1;
+    size_t i, k;
+    unsigned int addr;
+
+    if (n < (int)(sizeof known / sizeof known[0])) {
+        return known[n];
+    }
+    n -= (int)(sizeof known / sizeof known[0]);
+    for (i = 0; i < sizeof areas / sizeof areas[0]; i++) {
+        for (addr = areas[i][0]; addr <= areas[i][1]; addr += 0x20) {
+            for (k = 0; k < sizeof known / sizeof known[0]; k++) {
+                if (known[k] == addr) {
+                    break;
+                }
+            }
+            if (k == sizeof known / sizeof known[0] && n-- == 0) {
+                return addr;
+            }
+        }
+    }
+    return known[0];    /* more SIDs than free slots */
+}
 
 static int set_sid_chip_model(int val, void *param)
 {
@@ -665,6 +678,32 @@ static const resource_int_t stereo_resources_int[] = {
     RESOURCE_INT_LIST_END
 };
 
+/* template for Sid2AddressStart and up, registered once for each SID but the first */
+static resource_int_t sid_address_resources_int[] = {
+    { NULL, 0, RES_EVENT_SAME, NULL,
+      NULL, set_sid_address, NULL },
+    RESOURCE_INT_LIST_END
+};
+
+static int sid_address_resources_init(void)
+{
+    int chipno;
+    int result;
+
+    for (chipno = 1; chipno < sid_machine_get_max_sids(); chipno++) {
+        sid_address_resources_int[0].name = lib_msprintf("Sid%dAddressStart", chipno + 1);
+        sid_address_resources_int[0].factory_value = (int)sid_default_address(chipno);
+        sid_address_resources_int[0].value_ptr = (int *)&sid_address_start[chipno];
+        sid_address_resources_int[0].param = vice_int_to_ptr(chipno);
+        result = resources_register_int(sid_address_resources_int);
+        lib_free(sid_address_resources_int[0].name);
+        if (result < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /* template for Sid2Model and up, registered once for each SID but the first */
 static resource_int_t sid_chip_model_resources_int[] = {
     { NULL, SID_MODEL_SAME_AS_FIRST, RES_EVENT_SAME, NULL,
@@ -748,6 +787,9 @@ int sid_resources_init(void)
 #endif
 
     if (resources_register_int(stereo_resources_int) < 0) {
+        return -1;
+    }
+    if (sid_address_resources_init() < 0) {
         return -1;
     }
     if (sid_chip_model_resources_init() < 0) {

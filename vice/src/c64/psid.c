@@ -255,6 +255,15 @@ static const char *get_version_string(int version)
 /* We don't have any "panning" in the sound system yet, and the panning is
    hardwired to left, right, left, right etc. So we try to re-order the
    SIDs here to match the requested panning as good as possible. */
+static void psid_debug_sids(void)
+{
+    int n;
+
+    for (n = 0; n < SID_MACHINE_MAX_SID_VSID; n++) {
+        DBG(("sid%d addr: 0x%04x chan: %d version: %d", n, psid->sid_address[n], psid->sid_channel[n], psid->sid_version[n]));
+    }
+}
+
 static void psid_sort_channels(void)
 {
     int n, m;
@@ -290,16 +299,7 @@ static void psid_sort_channels(void)
         psid->sid_version[n] = 1; /* FIXME */
 #endif
     }
-    DBG(("sid0 addr: 0x%04x chan: %d version: %d", psid->sid_address[0], psid->sid_channel[0], psid->sid_version[0]));
-    DBG(("sid1 addr: 0x%04x chan: %d version: %d", psid->sid_address[1], psid->sid_channel[1], psid->sid_version[1]));
-    DBG(("sid2 addr: 0x%04x chan: %d version: %d", psid->sid_address[2], psid->sid_channel[2], psid->sid_version[2]));
-    DBG(("sid3 addr: 0x%04x chan: %d version: %d", psid->sid_address[3], psid->sid_channel[3], psid->sid_version[3]));
-    DBG(("sid4 addr: 0x%04x chan: %d version: %d", psid->sid_address[4], psid->sid_channel[4], psid->sid_version[4]));
-    DBG(("sid5 addr: 0x%04x chan: %d version: %d", psid->sid_address[5], psid->sid_channel[5], psid->sid_version[5]));
-    DBG(("sid6 addr: 0x%04x chan: %d version: %d", psid->sid_address[6], psid->sid_channel[6], psid->sid_version[6]));
-    DBG(("sid7 addr: 0x%04x chan: %d version: %d", psid->sid_address[7], psid->sid_channel[7], psid->sid_version[7]));
-    DBG(("sid8 addr: 0x%04x chan: %d version: %d", psid->sid_address[8], psid->sid_channel[8], psid->sid_version[8]));
-    DBG(("sid9 addr: 0x%04x chan: %d version: %d", psid->sid_address[9], psid->sid_channel[9], psid->sid_version[9]));
+    psid_debug_sids();
 }
 
 int psid_load_file(const char* filename)
@@ -415,6 +415,10 @@ int psid_load_file(const char* filename)
             if (val == 0) {
                 break;
             }
+            if (n >= SID_MACHINE_MAX_SID_VSID) {
+                log_error(vlog, "PSID asks for more than %d SIDs.", SID_MACHINE_MAX_SID_VSID);
+                goto fail;
+            }
             version = (val >> 4) & 3;                               /* (4e) bit 4-5 */
             if (version == 0) {
                 version = psid->sid_version[0];
@@ -484,16 +488,7 @@ int psid_load_file(const char* filename)
     DBG(("flags: 0x%04x", psid->flags));
     DBG(("start page: %02x max_pages: %02x", psid->start_page, psid->max_pages));
 
-    DBG(("sid0 addr: 0x%04x chan: %d version: %d", psid->sid_address[0], psid->sid_channel[0], psid->sid_version[0]));
-    DBG(("sid1 addr: 0x%04x chan: %d version: %d", psid->sid_address[1], psid->sid_channel[1], psid->sid_version[1]));
-    DBG(("sid2 addr: 0x%04x chan: %d version: %d", psid->sid_address[2], psid->sid_channel[2], psid->sid_version[2]));
-    DBG(("sid3 addr: 0x%04x chan: %d version: %d", psid->sid_address[3], psid->sid_channel[3], psid->sid_version[3]));
-    DBG(("sid4 addr: 0x%04x chan: %d version: %d", psid->sid_address[4], psid->sid_channel[4], psid->sid_version[4]));
-    DBG(("sid5 addr: 0x%04x chan: %d version: %d", psid->sid_address[5], psid->sid_channel[5], psid->sid_version[5]));
-    DBG(("sid6 addr: 0x%04x chan: %d version: %d", psid->sid_address[6], psid->sid_channel[6], psid->sid_version[6]));
-    DBG(("sid7 addr: 0x%04x chan: %d version: %d", psid->sid_address[7], psid->sid_channel[7], psid->sid_version[7]));
-    DBG(("sid8 addr: 0x%04x chan: %d version: %d", psid->sid_address[8], psid->sid_channel[8], psid->sid_version[8]));
-    DBG(("sid9 addr: 0x%04x chan: %d version: %d", psid->sid_address[9], psid->sid_channel[9], psid->sid_version[9]));
+    psid_debug_sids();
 
     psid_sort_channels();
 
