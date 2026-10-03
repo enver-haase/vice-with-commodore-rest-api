@@ -121,6 +121,17 @@ static struct {
 
 static log_t sidplay_log = LOG_DEFAULT;
 
+/* Letters the player cannot show, and the plain ones the firmware gives it
+   instead (filetype_sid.cc, ascii[] and petscii[]), in Latin-1 */
+static const unsigned char accented[] = {
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6,
+    0xc8, 0xc9, 0xca, 0xcb, 0xe8, 0xe9, 0xea, 0xeb, 0xcc, 0xcd, 0xce, 0xcf, 0xec, 0xed,
+    0xee, 0xef, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd8, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf8,
+    0xd9, 0xda, 0xdb, 0xdc, 0xf9, 0xfa, 0xfb, 0xfc, 0xc7, 0xe7, 0xd1, 0xf1, 0xdd, 0x9f,
+    0xfd, 0xff, 0xdf
+};
+static const char plain[] = "AAAAAAAaaaaaaaEEEEeeeeIIIIiiiiOOOOOOooooooUUUUuuuuCcNnYYyyB";
+
 /* ------------------------------------------------------------------------- */
 /* memory                                                                    */
 
@@ -398,7 +409,20 @@ static void load_tune(void)
     tune.header[0x7f] = (uint8_t)(tune.end >> 8);
     configure_sids();
     for (i = 0; i < 0x80; i++) {
-        ram_write((uint16_t)(tune.header_location + i), tune.header[i]);
+        uint8_t c = tune.header[i];
+        size_t j;
+
+        /* title, author and released: the player expects their accented
+           letters made plain, as the firmware does when it copies the header */
+        if (i >= 0x16 && i < 0x76) {
+            for (j = 0; j < sizeof(accented); j++) {
+                if (c == accented[j]) {
+                    c = (uint8_t)plain[j];
+                    break;
+                }
+            }
+        }
+        ram_write((uint16_t)(tune.header_location + i), c);
     }
 
     ram_write(0x0164, (uint8_t)(tune.header_location & 0xff));
