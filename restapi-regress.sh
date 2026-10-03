@@ -15,6 +15,16 @@ bad()  { print -- "  FAIL  $1"; fail=$((fail+1)) }
 check(){ if [[ "$2" == *"$3"* ]]; then ok "$1"; else bad "$1 (got: ${2:0:90})"; fi }
 screen(){ printf 'm 0400 07e7\nx\n' | eval $M | grep -ic "$1" }
 hex(){ od -An -tx1 | tr -d ' \n' }
+# the text on the screen the VIC shows, wherever the player put it
+infoscreen(){ python3 - "$B" <<'PY'
+import sys, urllib.request
+B = sys.argv[1]
+rd = lambda a, n: urllib.request.urlopen(f"{B}/machine:readmem?address={a:04X}&length={n}").read()
+scr = (3 - (rd(0xDD00, 1)[0] & 3)) * 0x4000 + (rd(0xD018, 1)[0] >> 4) * 0x400
+print("".join(chr(0x40 + c) if 1 <= c <= 26 else (chr(c) if 32 <= c <= 90 else " ")
+              for c in (x & 0x7f for x in rd(scr, 1000))))
+PY
+}
 drive_a(){ curl -s -m 5 $B/drives | python3 -c "import json,sys; d=json.load(sys.stdin)['drives'][0]['a']; print(d['$1'])" }
 
 # -9: an emulator stuck in a loop ignores SIGTERM and would keep the port
@@ -164,6 +174,30 @@ check "song past 256"    "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test
 check "not a SID"        "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test.prg")" "Error detected in file format"
 check "no such file"     "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/nothing.sid")" "Cannot open file"
 check "MUS data"         "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test-mus.sid")" "not supported on this architecture"
+# Compute's Sidplayer files take the MUS player cartridge, which puts the data
+# at $1000 and the player at $E000, in RAM under the KERNAL, where readmem
+# sees the ROM; so the info screen it leaves is what is checked
+check "PUT .mus"         "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/test.mus")" '"errors":[]'
+sleep 4
+check "MUS data at 1000" "$(mem 1000 8)" "020002000200014f"
+check "MUS player"       "$(infoscreen)" 'ULTIMATE MUS PLAYER'
+check "title from name"  "$(infoscreen)" 'TITLE : TEST'
+check "one SID"          "$(infoscreen)" 'WANT  : $D400 : 8580 / NTSC'
+check "cartridge gone"   "$(mem 8004 5)" "0000000000"
+# choosing the .str plays the .mus with it, and a second SID at $D500
+check "PUT .str"         "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/stereo.str")" '"errors":[]'
+sleep 4
+check "stereo title"     "$(infoscreen)" 'TITLE : STEREO'
+check "second SID"       "$(infoscreen)" 'WANT 2: $D500 : 8580'
+# an upload keeps the name it was sent with, so its extension still tells a
+# .mus from a SID file; its .str is not next to it, and an uploaded .str finds
+# no .mus
+check "POST .mus"        "$(curl -s -m 10 -X POST -F file=@$S/stereo.mus $B/runners:sidplay)" '"errors":[]'
+sleep 4
+check "uploaded, mono"   "$(infoscreen)" 'WANT  : $D400 : 8580 / NTSC'
+[[ "$(infoscreen)" != *'WANT 2'* ]] && ok "no second SID for an upload" || bad "an uploaded .mus found its .str"
+check "POST .str"        "$(curl -s -m 10 -X POST -F file=@$S/stereo.str $B/runners:sidplay)" "Cannot open file"
+check "POST raw .mus"    "$(curl -s -m 10 -X POST --data-binary @$S/test.mus -H 'Content-Type: application/octet-stream' $B/runners:sidplay)" "Error detected in file format"
 
 print "== runners: cartridge =="
 check "PUT run_crt"      "$(curl -s -m 5 -X PUT "$B/runners:run_crt?file=$S/test.crt")" '"errors":[]'
