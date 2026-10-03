@@ -13,8 +13,9 @@
 # the third SID, but a missing flags mask made the second show UNKNOWN; and
 # 610b191b, also from #949, which labels the measured lines FOUND and the
 # requested ones WANT, numbered for more than one SID, with an empty line
-# between the two. The only difference left from that firmware's player is
-# the title line, which keeps 1.1.0's wording.
+# between the two; and 237ade3b, which shows the clock once per block and
+# numbers only the second and third SID. The only difference left from that
+# firmware's player is the title line, which keeps 1.1.0's wording.
 # They are assembled the way that firmware's Makefile does it, with the 64tass
 # it ships (tools/64tass, V1.53.1515): newer releases reject the source. That
 # binary is x86-64 Linux, so it runs in Docker here.
@@ -23,7 +24,7 @@
 # different one means the sources or the assembler changed.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-expected=4a905e298a621fcddc4e747a55fa98897ee42bdf6736c105567cf06cd8fb745a
+expected=b3f7e88651120b38b29f184c4284834bcdf3bcc8c20223b7798a162786800a09
 tool=https://raw.githubusercontent.com/enver-haase/1541ultimate/1.1.0/tools/64tass/64tass
 
 work=$(mktemp -d)
@@ -58,7 +59,7 @@ open(sys.argv[2], 'w').write('''/** \\file   restapi_sidcrt.h
  *  Zweijtzer, part of the 1541-Ultimate firmware and licensed with it under
  *  the GNU General Public License version 3. Assembled from the sources at the
  *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11, e84e1560,
- *  beea28f2 and 610b191b, as restapi-sidcrt.sh describes, with the firmware's own 64tass
+ *  beea28f2, 610b191b and 237ade3b, as restapi-sidcrt.sh describes, with the firmware's own 64tass
  *  V1.53.1515.
  *
  *  %d bytes, sha256 %s
