@@ -95,6 +95,9 @@ typedef struct restapi_request_s {
     /* temp files extracted from a multipart/form-data body; removed again when
        the request is freed, unless a handler took ownership */
     char *uploads[RESTAPI_MAX_UPLOADS];
+    /* the file name each part was sent with, or NULL: the firmware names its
+       temporary file after it, so its extension still tells the file type */
+    char *upload_names[RESTAPI_MAX_UPLOADS];
     int upload_count;
 } restapi_request_t;
 
