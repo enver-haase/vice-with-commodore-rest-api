@@ -166,14 +166,15 @@ as the device's format does.
 player: the "Ultimate SID Player" cartridge by Wilfred Bos, assembled from
 firmware 1.1.0's sources (`restapi-sidcrt/`, rebuilt by `restapi-sidcrt.sh`) with
 changes on top: the placement fix from the firmware's master (in 3.15a), and the
-info screen as proposed in GideonZ/1541ultimate#949: a FOUND line with the
-detected model for every SID the tune uses, and a WANT line with the model the
-header asks for, the second and third numbered, the clock on the first line of
-each block only. The model is measured at any address; one where no SID, or
-only a mirror of the SID at `$D400`, answers shows as unknown. A SID whose model the header leaves open shows
-the first SID's, as the SID file format defines it, and UNKNOWN when the first
-is open too. The first WANT line ends in the song's speed, (VBI) or (CIA), and a
-tune made for both models or both clocks shows ANY.
+info screen as proposed in GideonZ/1541ultimate#949, a table under a heading row:
+NEEDS lines with what the header asks for, the model, the video standard and,
+on the first, the song's interrupt (VBI, CIA, or RSID for an RSID tune), then
+FOUND lines with the model measured at every address the tune uses. An address
+where no SID, or only a mirror of the SID at `$D400`, answers shows as UNKNOWN.
+A SID whose model the header leaves open shows the first SID's, as the SID file
+format defines it, and UNKNOWN when the first is open too; a tune made for both
+models or both clocks shows ANY. The accented letters of title, author and
+released are made plain before the player sees them, as the firmware does.
 The tune's header is prepared as the firmware prepares it, the machine is reset
 into the cartridge, and the tune is written to memory when the cartridge asks for
 it. The cartridge then switches itself off through `$DFFF`, a switch of the
