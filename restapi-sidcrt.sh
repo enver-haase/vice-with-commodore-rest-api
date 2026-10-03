@@ -7,10 +7,12 @@
 # top: f0c51d11 from the firmware's master (in 3.15a, not in 1.1.0), "Fix
 # installing extra player in some scenario when there is enough space after
 # load end address"; e84e1560 from GideonZ/1541ultimate#949, a SYSTEM line with
-# the detected model for every SID the tune uses; and SID #2 and #3 lines that
-# show UNKNOWN when the header leaves their model open, where 1.1.0 shows the
-# model of SID #1 for the third SID and, through a flags mask missing, UNKNOWN
-# for the second.
+# the detected model for every SID the tune uses; and beea28f2, also from #949,
+# which makes the SID #2 line show SID #1's model when the header leaves its
+# model open, as the SID file format defines it: 1.1.0 meant to, and did for
+# the third SID, but a missing flags mask made the second show UNKNOWN. The
+# only difference left from that firmware's player is the title line, which
+# keeps 1.1.0's wording.
 # They are assembled the way that firmware's Makefile does it, with the 64tass
 # it ships (tools/64tass, V1.53.1515): newer releases reject the source. That
 # binary is x86-64 Linux, so it runs in Docker here.
@@ -19,7 +21,7 @@
 # different one means the sources or the assembler changed.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-expected=b0d6da48e84e67a83f0391d32200ff6d50075751bd0255a56747e63a9a83ef66
+expected=84b57caf8bcffd3181088a50724b61c5070fa8f8924cd0c1cb6a4cc1841ae11c
 tool=https://raw.githubusercontent.com/enver-haase/1541ultimate/1.1.0/tools/64tass/64tass
 
 work=$(mktemp -d)
@@ -53,8 +55,8 @@ open(sys.argv[2], 'w').write('''/** \\file   restapi_sidcrt.h
  *  "Ultimate SID Player V2.0d", Copyright (c) 2009-2023 Wilfred Bos / Gideon
  *  Zweijtzer, part of the 1541-Ultimate firmware and licensed with it under
  *  the GNU General Public License version 3. Assembled from the sources at the
- *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11 and e84e1560
- *  and the changes restapi-sidcrt.sh describes, with the firmware's own 64tass
+ *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11, e84e1560 and
+ *  beea28f2, as restapi-sidcrt.sh describes, with the firmware's own 64tass
  *  V1.53.1515.
  *
  *  %d bytes, sha256 %s
