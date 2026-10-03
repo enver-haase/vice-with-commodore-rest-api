@@ -1131,6 +1131,7 @@ printSidInfo    lda $f7             ; restore sid header address
                 lsr
                 lsr
                 lsr
+                sta TEMP
                 ldx #$01            ; first SID
                 jsr printSingleSidInfo
 
@@ -1143,7 +1144,9 @@ printSidInfo    lda $f7             ; restore sid header address
                 rol
                 rol
                 and #$03            ; bits 7-6 of the flags, the model of the second SID
-                ldx #$02            ; second SID
+                bne +
+                lda TEMP            ; unknown SID model for second SID so use the info of first SID
++               ldx #$02            ; second SID
                 jsr printSingleSidInfo
 
                 ldy #$7b            ; is third SID address defined?
@@ -1153,7 +1156,9 @@ printSidInfo    lda $f7             ; restore sid header address
                 ldy #$76
                 jsr readHeader
                 and #$03            ; bits 9-8 of the flags, the model of the third SID
-                ldx #$03            ; third SID
+                bne +
+                lda TEMP            ; unknown SID model for third SID so use the info of first SID
++               ldx #$03            ; third SID
                 jsr printSingleSidInfo
 noMoreSids2
                 ; print number of songs
