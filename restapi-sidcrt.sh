@@ -13,8 +13,10 @@
 # the third SID, but a missing flags mask made the second show UNKNOWN; and
 # 610b191b, also from #949, which labels the measured lines FOUND and the
 # requested ones WANT, numbered for more than one SID, with an empty line
-# between the two; and 237ade3b, which shows the clock once per block and
-# numbers only the second and third SID. The only difference left from that
+# between the two; 237ade3b, which shows the clock once per block and
+# numbers only the second and third SID; and 64b3b337, which ends the first
+# WANT line in the song's speed, (VBI) or (CIA), and says ANY for a tune made
+# for both models or both clocks. The only difference left from that
 # firmware's players is the title line, which keeps 1.1.0's wording.
 #
 # The MUS player cartridge (muscrt.asm) is built from the same sources, and
@@ -29,8 +31,8 @@
 # different one means the sources or the assembler changed.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-expected=b3f7e88651120b38b29f184c4284834bcdf3bcc8c20223b7798a162786800a09
-expected_mus=1363f44baa6935f191a1a859e9570a41e665ad6978f5e9d3272ca933ffdbdcef
+expected=a16dd05b8b4c9a14189ab9e9675bcd35d204eb293386752a5b061815db1b02fc
+expected_mus=28a915b7096f284d0c5e05a2eab03d1110b8370a6443c00acf31db7fc91df76e
 expected_musplayer=92bb91eb94556efa404a5af03104cc387851c7c7080e3238bba477b50db66999
 tool=https://raw.githubusercontent.com/enver-haase/1541ultimate/1.1.0/tools/64tass/64tass
 
@@ -55,8 +57,8 @@ import hashlib, sys
 target, src, want_sid, want_mus, want_player = sys.argv[1:6]
 
 SOURCES = (" *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11, e84e1560,\n"
-           " *  beea28f2, 610b191b and 237ade3b, as restapi-sidcrt.sh describes, with\n"
-           " *  the firmware's own 64tass V1.53.1515.")
+           " *  beea28f2, 610b191b, 237ade3b and 64b3b337, as restapi-sidcrt.sh\n"
+           " *  describes, with the firmware's own 64tass V1.53.1515.")
 
 
 def load(name, want):
