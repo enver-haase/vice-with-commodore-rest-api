@@ -455,6 +455,13 @@ int drive_set_disk_drive_type(unsigned int type, struct diskunit_context_s *drv)
         drivecpu_init(drv, type);
     }
 
+    /* the CPU reset above set the drive clock back to 0, while the rotation
+       still counts from the clock it had before; x64sc rotates the disk from
+       drive_cycle_hook() before the drive CPU gets to handle its reset, and the
+       unsigned difference then runs into the billions of billions of cycles */
+    rotation_reset(drive0);
+    rotation_reset(drive1);
+
     return 0;
 }
 

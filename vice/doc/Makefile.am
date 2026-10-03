@@ -8,6 +8,7 @@ MISC_DOX = \
 	iec-bus.txt \
 	joystick.md \
 	Release-Howto.txt \
+	restapi.md \
 	vice.texi \
 	gpl.texi
 

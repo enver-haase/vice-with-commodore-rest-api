@@ -28,6 +28,7 @@
 #include "vice.h"
 
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 
 #include "lib.h"
@@ -404,543 +405,217 @@ static const ui_menu_entry_t us_buffsize_menu[] = {
 #endif /* HAVE_USBSID */
 
 
+/* memory of the built menus, freed by uisid_menu_shutdown() */
+static void **sid_menu_allocs = NULL;
+static int sid_menu_num_allocs = 0;
+
+static void *sid_menu_alloc(size_t size)
+{
+    void *p = lib_calloc(1, size);
+
+    sid_menu_allocs = lib_realloc(sid_menu_allocs, (sid_menu_num_allocs + 1) * sizeof *sid_menu_allocs);
+    sid_menu_allocs[sid_menu_num_allocs++] = p;
+    return p;
+}
+
+static char *sid_menu_text(const char *fmt, int n)
+{
+    char *text = sid_menu_alloc(48);
+
+    snprintf(text, 48, fmt, n);
+    return text;
+}
+
+static ui_menu_entry_t sid_menu_item(char *string, ui_menu_entry_type_t type,
+                                     ui_callback_t callback, ui_callback_data_t data)
+{
+    ui_menu_entry_t item;
+
+    memset(&item, 0, sizeof item);
+    item.action   = ACTION_NONE;
+    item.string   = string;
+    item.type     = type;
+    item.callback = callback;
+    item.data     = data;
+    return item;
+}
+
 #if defined(HAVE_FASTSID) || defined(HAVE_RESID) || defined(HAVE_RESID_DTV) || defined(HAVE_RESIDFP)
 UI_MENU_DEFINE_TOGGLE(SidFilters)
 UI_MENU_DEFINE_RADIO(SidStereo)
-UI_MENU_DEFINE_RADIO(Sid2AddressStart)
-UI_MENU_DEFINE_RADIO(Sid3AddressStart)
-UI_MENU_DEFINE_RADIO(Sid4AddressStart)
-UI_MENU_DEFINE_RADIO(Sid5AddressStart)
-UI_MENU_DEFINE_RADIO(Sid6AddressStart)
-UI_MENU_DEFINE_RADIO(Sid7AddressStart)
-UI_MENU_DEFINE_RADIO(Sid8AddressStart)
-UI_MENU_DEFINE_RADIO(Sid9AddressStart)
-UI_MENU_DEFINE_RADIO(Sid10AddressStart)
 
-#define SID_D4XX_MENU(menu, txt, showcb, cb)    \
-static const ui_menu_entry_t menu[] = {         \
-    {   .string   = txt,                        \
-        .type     = MENU_ENTRY_TEXT,            \
-        .callback = showcb                      \
-    },                                          \
-    {   .string   = "$D420",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd420  \
-    },                                          \
-    {   .string   = "$D440",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd440  \
-    },                                          \
-    {   .string   = "$D460",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd460  \
-    },                                          \
-    {   .string   = "$D480",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd480  \
-    },                                          \
-    {   .string   = "$D4A0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd4a0  \
-    },                                          \
-    {   .string   = "$D4C0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd4c0  \
-    },                                          \
-    {   .string   = "$D4E0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd4e0  \
-    },                                          \
-    SDL_MENU_LIST_END                           \
-};
+/* The menus of the further SIDs, SID #2 and up, are built by
+   uisid_menu_create(), one set for each SID the machine has. The data of
+   their radio items holds the number of the SID (0 for the first) in the
+   upper 16 bits and the value in the lower 16. */
+#define SID_MENU_DATA(chipno, value) \
+    ((ui_callback_data_t)vice_int_to_ptr(((chipno) << 16) | ((value) & 0xffff)))
 
-#define SID_D5XX_MENU(menu, txt, showcb, cb)    \
-static const ui_menu_entry_t menu[] = {         \
-    {   .string   = txt,                        \
-        .type     = MENU_ENTRY_TEXT,            \
-        .callback = showcb                      \
-    },                                          \
-    {   .string   = "$D500",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd500  \
-    },                                          \
-    {   .string   = "$D520",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd520  \
-    },                                          \
-    {   .string   = "$D540",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd540  \
-    },                                          \
-    {   .string   = "$D560",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd560  \
-    },                                          \
-    {   .string   = "$D580",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd580  \
-    },                                          \
-    {   .string   = "$D5A0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd5a0  \
-    },                                          \
-    {   .string   = "$D5C0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd5c0  \
-    },                                          \
-    {   .string   = "$D5E0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd5e0  \
-    },                                          \
-    SDL_MENU_LIST_END                           \
-};
+static const char *sid_chip_radio(int activated, ui_callback_data_t param,
+                                  const char *fmt, int value)
+{
+    char name[32];
+    int current;
 
-#define SID_D6XX_MENU(menu, txt, showcb, cb)    \
-static const ui_menu_entry_t menu[] = {         \
-    {   .string   = txt,                        \
-        .type     = MENU_ENTRY_TEXT,            \
-        .callback = showcb                      \
-    },                                          \
-    {   .string   = "$D600",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd600  \
-    },                                          \
-    {   .string   = "$D620",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd620  \
-    },                                          \
-    {   .string   = "$D640",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd640  \
-    },                                          \
-    {   .string   = "$D660",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd660  \
-    },                                          \
-    {   .string   = "$D680",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd680  \
-    },                                          \
-    {   .string   = "$D6A0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd6a0  \
-    },                                          \
-    {   .string   = "$D6C0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd6c0  \
-    },                                          \
-    {   .string   = "$D6E0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd6e0  \
-    },                                          \
-    SDL_MENU_LIST_END                           \
-};
+    snprintf(name, sizeof name, fmt, (vice_ptr_to_int(param) >> 16) + 1);
+    if (activated) {
+        resources_set_int(name, value);
+    } else if (resources_get_int(name, &current) == 0 && current == value) {
+        return sdl_menu_text_tick;
+    }
+    return NULL;
+}
 
-#define SID_D7XX_MENU(menu, txt, showcb, cb)    \
-static const ui_menu_entry_t menu[] = {         \
-    {   .string   = txt,                        \
-        .type     = MENU_ENTRY_TEXT,            \
-        .callback = showcb                      \
-    },                                          \
-    {   .string   = "$D700",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd700  \
-    },                                          \
-    {   .string   = "$D720",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd720  \
-    },                                          \
-    {   .string   = "$D740",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd740  \
-    },                                          \
-    {   .string   = "$D760",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd760  \
-    },                                          \
-    {   .string   = "$D780",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd780  \
-    },                                          \
-    {   .string   = "$D7A0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd7a0  \
-    },                                          \
-    {   .string   = "$D7C0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd7c0  \
-    },                                          \
-    {   .string   = "$D7E0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xd7e0  \
-    },                                          \
-    SDL_MENU_LIST_END                           \
-};
+static UI_MENU_CALLBACK(radio_SidNAddressStart_callback)
+{
+    return sid_chip_radio(activated, param, "Sid%dAddressStart",
+                          vice_ptr_to_int(param) & 0xffff);
+}
 
-#define SID_DEXX_MENU(menu, txt, showcb, cb)    \
-static const ui_menu_entry_t menu[] = {         \
-    {   .string   = txt,                        \
-        .type     = MENU_ENTRY_TEXT,            \
-        .callback = showcb                      \
-    },                                          \
-    {   .string   = "$DE00",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xde00  \
-    },                                          \
-    {   .string   = "$DE20",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xde20  \
-    },                                          \
-    {   .string   = "$DE40",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xde40  \
-    },                                          \
-    {   .string   = "$DE60",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xde60  \
-    },                                          \
-    {   .string   = "$DE80",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xde80  \
-    },                                          \
-    {   .string   = "$DEA0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdea0  \
-    },                                          \
-    {   .string   = "$DEC0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdec0  \
-    },                                          \
-    {   .string   = "$DEE0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdee0  \
-    },                                          \
-    SDL_MENU_LIST_END                           \
-};
+static UI_MENU_CALLBACK(radio_SidNModel_callback)
+{
+    return sid_chip_radio(activated, param, "Sid%dModel",
+                          (int)(int16_t)(vice_ptr_to_int(param) & 0xffff));
+}
 
-#define SID_DFXX_MENU(menu, txt, showcb, cb)    \
-static const ui_menu_entry_t menu[] = {         \
-    {   .string   = txt,                        \
-        .type     = MENU_ENTRY_TEXT,            \
-        .callback = showcb                      \
-    },                                          \
-    {   .string   = "$DF00",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdf00  \
-    },                                          \
-    {   .string   = "$DF20",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdf20  \
-    },                                          \
-    {   .string   = "$DF40",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdf40  \
-    },                                          \
-    {   .string   = "$DF60",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdf60  \
-    },                                          \
-    {   .string   = "$DF80",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdf80  \
-    },                                          \
-    {   .string   = "$DFA0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdfa0  \
-    },                                          \
-    {   .string   = "$DFC0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdfc0  \
-    },                                          \
-    {   .string   = "$DFE0",                    \
-        .type     = MENU_ENTRY_RESOURCE_RADIO,  \
-        .callback = cb,                         \
-        .data     = (ui_callback_data_t)0xdfe0  \
-    },                                          \
-    SDL_MENU_LIST_END                           \
-};
+/* the address of a SID, for the title of its address menus: data is the
+   number of the SID */
+static UI_MENU_CALLBACK(show_SidAddress_callback)
+{
+    static char buf[20];
+    char name[32];
+    int value = 0;
 
-#define SID_EXTRA_MENU(sid_nr, sid_text)                                                                                                                    \
-    static UI_MENU_CALLBACK(show_Sid##sid_nr##AddressStart_callback)                                                                                        \
-    {                                                                                                                                                       \
-        static char buf[20];                                                                                                                                \
-        int value;                                                                                                                                          \
-                                                                                                                                                            \
-        resources_get_int_sprintf("Sid%dAddressStart", &value, sid_nr);                                                                                     \
-                                                                                                                                                            \
-        sprintf(buf, "$%04x", (unsigned int)value);                                                                                                         \
-        return buf;                                                                                                                                         \
-    }                                                                                                                                                       \
-                                                                                                                                                            \
-    SID_D4XX_MENU(sid##sid_nr##_d4x0_menu, sid_text " SID base address", show_Sid##sid_nr##AddressStart_callback, radio_Sid##sid_nr##AddressStart_callback) \
-    SID_D5XX_MENU(sid##sid_nr##_d5x0_menu, sid_text " SID base address", show_Sid##sid_nr##AddressStart_callback, radio_Sid##sid_nr##AddressStart_callback) \
-    SID_D6XX_MENU(sid##sid_nr##_d6x0_menu, sid_text " SID base address", show_Sid##sid_nr##AddressStart_callback, radio_Sid##sid_nr##AddressStart_callback) \
-    SID_D7XX_MENU(sid##sid_nr##_d7x0_menu, sid_text " SID base address", show_Sid##sid_nr##AddressStart_callback, radio_Sid##sid_nr##AddressStart_callback) \
-    SID_DEXX_MENU(sid##sid_nr##_dex0_menu, sid_text " SID base address", show_Sid##sid_nr##AddressStart_callback, radio_Sid##sid_nr##AddressStart_callback) \
-    SID_DFXX_MENU(sid##sid_nr##_dfx0_menu, sid_text " SID base address", show_Sid##sid_nr##AddressStart_callback, radio_Sid##sid_nr##AddressStart_callback) \
-                                                                                                                                                            \
-    static const ui_menu_entry_t c128_sid##sid_nr##_base_menu[] = {                                                                                         \
-        {   .string   = sid_text " SID base address",                                                                                                       \
-            .type     = MENU_ENTRY_TEXT,                                                                                                                    \
-            .callback = show_Sid##sid_nr##AddressStart_callback,                                                                                            \
-        },                                                                                                                                                  \
-        {   .string   = "$D4x0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_d4x0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$D7x0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_d7x0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$DEx0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_dex0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$DFx0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_dfx0_menu                                                                                         \
-        },                                                                                                                                                  \
-        SDL_MENU_LIST_END                                                                                                                                   \
-    };                                                                                                                                                      \
-                                                                                                                                                            \
-    static const ui_menu_entry_t c64_sid##sid_nr##_base_menu[] = {                                                                                          \
-        {   .string   = sid_text " SID base address",                                                                                                       \
-            .type     = MENU_ENTRY_TEXT,                                                                                                                    \
-            .callback = show_Sid##sid_nr##AddressStart_callback,                                                                                            \
-        },                                                                                                                                                  \
-        {   .string   = "$D4x0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_d4x0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$D5x0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_d5x0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$D6x0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_d6x0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$D7x0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_d7x0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$DEx0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_dex0_menu                                                                                         \
-        },                                                                                                                                                  \
-        {   .string   = "$DFx0",                                                                                                                            \
-            .type     = MENU_ENTRY_SUBMENU,                                                                                                                 \
-            .callback = submenu_callback,                                                                                                                   \
-            .data     = (ui_callback_data_t)sid##sid_nr##_dfx0_menu                                                                                         \
-        },                                                                                                                                                  \
-        SDL_MENU_LIST_END                                                                                                                                   \
-    };
+    snprintf(name, sizeof name, "Sid%dAddressStart", vice_ptr_to_int(param) + 1);
+    resources_get_int(name, &value);
+    snprintf(buf, sizeof buf, "$%04x", (unsigned int)value);
+    return buf;
+}
 
-SID_EXTRA_MENU(2, "Second")
-SID_EXTRA_MENU(3, "Third")
-SID_EXTRA_MENU(4, "Fourth")
-SID_EXTRA_MENU(5, "Fifth")
-SID_EXTRA_MENU(6, "Sixth")
-SID_EXTRA_MENU(7, "Seventh")
-SID_EXTRA_MENU(8, "Eight")
-SID_EXTRA_MENU(9, "Ninth")
-SID_EXTRA_MENU(10, "Tenth")
+/* the same for the item that opens them: data is the menu, whose title has
+   the number of the SID */
+static UI_MENU_CALLBACK(show_SidBase_callback)
+{
+    const ui_menu_entry_t *menu = (const ui_menu_entry_t *)param;
+
+    return show_SidAddress_callback(0, menu[0].data);
+}
 
 static UI_MENU_CALLBACK(show_SidStereo_callback)
 {
-    int value;
+    static char buf[8];
+    int value = 0;
 
     resources_get_int("SidStereo", &value);
-    switch (value) {
-        case 1:
-            return "One";
-        case 2:
-            return "Two";
-        case 3:
-            return "Three";
-        case 4:
-            return "Four";
-        case 5:
-            return "Five";
-        case 6:
-            return "Six";
-        case 7:
-            return "Seven";
-        case 8:
-            return "Eight";
-        case 9:
-            return "Nine";
-    }
-    return "None";
+    snprintf(buf, sizeof buf, "%d", value);
+    return buf;
 }
 
-static const ui_menu_entry_t c64_stereo_sid_menu[] = {
-    {   .string   = "None",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)0
-    },
-    {   .string   = "One",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)1
-    },
-    {   .string   = "Two",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)2
-    },
-    {   .string   = "Three",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)3
-    },
-    {   .string   = "Four",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)4
-    },
-    {   .string   = "Five",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)5
-    },
-    {   .string   = "Six",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)6
-    },
-    {   .string   = "Seven",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)7
-    },
-    {   .string   = "Eight",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)8
-    },
-    {   .string   = "Nine",
-        .type     = MENU_ENTRY_RESOURCE_RADIO,
-        .callback = radio_SidStereo_callback,
-        .data     = (ui_callback_data_t)9
-    },
-    SDL_MENU_LIST_END
-};
+/* the "Extra SIDs" menu: 0 up to the number of further SIDs */
+static ui_menu_entry_t *sid_stereo_menu_create(void)
+{
+    int max = sid_machine_get_max_sids();
+    ui_menu_entry_t *menu = sid_menu_alloc((size_t)(max + 1) * sizeof *menu);
+    int n;
+
+    for (n = 0; n < max; n++) {
+        menu[n] = sid_menu_item(sid_menu_text("%d", n), MENU_ENTRY_RESOURCE_RADIO,
+                                radio_SidStereo_callback, (ui_callback_data_t)vice_int_to_ptr(n));
+    }
+    return menu;
+}
+
+/* the base address menu of a SID: a submenu for each page of I/O */
+static ui_menu_entry_t *sid_address_menu_create(int chipno, int c128)
+{
+    static const int c64_pages[] = { 0xd4, 0xd5, 0xd6, 0xd7, 0xde, 0xdf };
+    static const int c128_pages[] = { 0xd4, 0xd7, 0xde, 0xdf };
+    const int *pages = c128 ? c128_pages : c64_pages;
+    int num_pages = c128 ? (int)(sizeof c128_pages / sizeof c128_pages[0])
+                         : (int)(sizeof c64_pages / sizeof c64_pages[0]);
+    ui_menu_entry_t *menu = sid_menu_alloc((size_t)(num_pages + 2) * sizeof *menu);
+    char *title = sid_menu_text("SID #%d base address", chipno + 1);
+    int p;
+
+    menu[0] = sid_menu_item(title, MENU_ENTRY_TEXT, show_SidAddress_callback,
+                            (ui_callback_data_t)vice_int_to_ptr(chipno));
+    for (p = 0; p < num_pages; p++) {
+        /* $D400 is the first SID, so its page starts at $D420 */
+        int first = (pages[p] == 0xd4) ? 1 : 0;
+        ui_menu_entry_t *page = sid_menu_alloc((size_t)(8 - first + 2) * sizeof *page);
+        int a;
+
+        page[0] = sid_menu_item(title, MENU_ENTRY_TEXT, show_SidAddress_callback,
+                                (ui_callback_data_t)vice_int_to_ptr(chipno));
+        for (a = first; a < 8; a++) {
+            int addr = (pages[p] << 8) | (a << 5);
+
+            page[a - first + 1] = sid_menu_item(sid_menu_text("$%04X", addr), MENU_ENTRY_RESOURCE_RADIO,
+                                                radio_SidNAddressStart_callback, SID_MENU_DATA(chipno, addr));
+        }
+        menu[p + 1] = sid_menu_item(sid_menu_text("$%02Xx0", pages[p]), MENU_ENTRY_SUBMENU,
+                                    submenu_callback, (ui_callback_data_t)page);
+    }
+    return menu;
+}
+
+/* the model menu of a SID */
+static ui_menu_entry_t *sid_chip_model_menu_create(int chipno)
+{
+    static const struct {
+        const char *name;
+        int model;
+    } models[] = {
+        { "Same as SID #1",    SID_MODEL_SAME_AS_FIRST },
+        { "6581",              SID_MODEL_6581 },
+        { "8580",              SID_MODEL_8580 },
+        { "8580 + digi boost", SID_MODEL_8580D }
+    };
+    int n = (int)(sizeof models / sizeof models[0]);
+    ui_menu_entry_t *menu = sid_menu_alloc((size_t)(n + 1) * sizeof *menu);
+    int i;
+
+    for (i = 0; i < n; i++) {
+        menu[i] = sid_menu_item((char *)models[i].name, MENU_ENTRY_RESOURCE_RADIO,
+                                radio_SidNModel_callback, SID_MENU_DATA(chipno, models[i].model));
+    }
+    return menu;
+}
+
 #endif /* defined(HAVE_FASTSID) || defined(HAVE_RESID) || defined(HAVE_RESID_DTV) || defined(HAVE_RESIDFP) */
 
-ui_menu_entry_t sid_c64_menu[] = {
+/* fill a SID menu: "SID Model", the further SIDs, then the fixed rest */
+static void sid_menu_build(ui_menu_entry_t *menu, const ui_menu_entry_t *tail,
+                           size_t tail_len, ui_menu_entry_t *stereo_menu, int c128)
+{
+    int i = 0;
+    int chipno;
+    int max = sid_machine_get_max_sids();
+
     /* CAUTION: position is hardcoded below */
-    {   .string   = "SID Model",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = submenu_radio_callback,
-    },
+    menu[i++] = sid_menu_item("SID Model", MENU_ENTRY_SUBMENU, submenu_radio_callback, NULL);
 #if defined(HAVE_FASTSID) || defined(HAVE_RESID) || defined(HAVE_RESID_DTV) || defined(HAVE_RESIDFP)
-    {   .string   = "Extra SIDs",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_SidStereo_callback,
-        .data     = (ui_callback_data_t)c64_stereo_sid_menu
-    },
-    {   .string   = "Second SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid2AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid2_base_menu
-    },
-    {   .string   = "Third SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid3AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid3_base_menu
-    },
-    {   .string   = "Fourth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid4AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid4_base_menu
-    },
-    {   .string   = "Fifth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid5AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid5_base_menu
-    },
-    {   .string   = "Sixth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid6AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid6_base_menu
-    },
-    {   .string   = "Seventh SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid7AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid7_base_menu
-    },
-    {   .string   = "Eight SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid8AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid8_base_menu
-    },
-    {   .string   = "Ninth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid9AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid9_base_menu
-    },
-    {   .string   = "Tenth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid10AddressStart_callback,
-        .data     = (ui_callback_data_t)c64_sid10_base_menu
-    },
+    if (max > 1) {
+        menu[i++] = sid_menu_item("Extra SIDs", MENU_ENTRY_SUBMENU, show_SidStereo_callback,
+                                  (ui_callback_data_t)stereo_menu);
+        for (chipno = 1; chipno < max; chipno++) {
+            menu[i++] = sid_menu_item(sid_menu_text("SID #%d base address", chipno + 1),
+                                      MENU_ENTRY_SUBMENU, show_SidBase_callback,
+                                      (ui_callback_data_t)sid_address_menu_create(chipno, c128));
+        }
+        for (chipno = 1; chipno < max; chipno++) {
+            menu[i++] = sid_menu_item(sid_menu_text("SID #%d model", chipno + 1),
+                                      MENU_ENTRY_SUBMENU, submenu_radio_callback,
+                                      (ui_callback_data_t)sid_chip_model_menu_create(chipno));
+        }
+    }
+#endif
+    memcpy(menu + i, tail, tail_len * sizeof *tail);
+}
+
+/* the fixed rest of the menu, after the further SIDs */
+static const ui_menu_entry_t sid_c64_menu_tail[] = {
+#if defined(HAVE_FASTSID) || defined(HAVE_RESID) || defined(HAVE_RESID_DTV) || defined(HAVE_RESIDFP)
     {   .string   = "Emulate filters",
         .type     = MENU_ENTRY_RESOURCE_TOGGLE,
         .callback = toggle_SidFilters_callback,
@@ -958,63 +633,14 @@ ui_menu_entry_t sid_c64_menu[] = {
     SDL_MENU_LIST_END
 };
 
-ui_menu_entry_t sid_c128_menu[] = {
-    /* CAUTION: position is hardcoded below */
-    {   .string   = "SID Model",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = submenu_radio_callback
-    },
+/* built by uisid_menu_create(): "SID Model", for each further SID its base
+   address and model, and the rest */
+ui_menu_entry_t sid_c64_menu[2 + (2 * (SOUND_SIDS_MAX - 1))
+                    + (sizeof sid_c64_menu_tail / sizeof sid_c64_menu_tail[0])];
+
+/* the fixed rest of the menu, after the further SIDs */
+static const ui_menu_entry_t sid_c128_menu_tail[] = {
 #if defined(HAVE_FASTSID) || defined(HAVE_RESID) || defined(HAVE_RESID_DTV) || defined(HAVE_RESIDFP)
-    {   .string   = "Extra SIDs",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_SidStereo_callback,
-        .data     = (ui_callback_data_t)c64_stereo_sid_menu
-    },
-    {   .string   = "Second SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid2AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid2_base_menu
-    },
-    {   .string   = "Third SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid3AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid3_base_menu
-    },
-    {   .string   = "Fourth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid4AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid4_base_menu
-    },
-    {   .string   = "Fift SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid5AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid5_base_menu
-    },
-    {   .string   = "Sixth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid6AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid6_base_menu
-    },
-    {   .string   = "Seventh SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid7AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid7_base_menu
-    },
-    {   .string   = "Eighth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid8AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid8_base_menu
-    },
-    {   .string   = "Ninth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid9AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid9_base_menu
-    },
-    {   .string   = "Tenth SID base address",
-        .type     = MENU_ENTRY_SUBMENU,
-        .callback = show_Sid10AddressStart_callback,
-        .data     = (ui_callback_data_t)c128_sid10_base_menu
-    },
     {   .string   = "Emulate filters",
         .type     = MENU_ENTRY_RESOURCE_TOGGLE,
         .callback = toggle_SidFilters_callback
@@ -1031,6 +657,11 @@ ui_menu_entry_t sid_c128_menu[] = {
 #endif
     SDL_MENU_LIST_END
 };
+
+/* built by uisid_menu_create(): "SID Model", for each further SID its base
+   address and model, and the rest */
+ui_menu_entry_t sid_c128_menu[2 + (2 * (SOUND_SIDS_MAX - 1))
+                    + (sizeof sid_c128_menu_tail / sizeof sid_c128_menu_tail[0])];
 
 ui_menu_entry_t sid_cbm2_menu[] = {
     /* CAUTION: position is hardcoded below */
@@ -1258,6 +889,16 @@ void uisid_menu_create(void)
     sid_engine_model_t **list = sid_get_engine_model_list();
     int i;
 
+    ui_menu_entry_t *stereo_menu = NULL;
+
+#if defined(HAVE_FASTSID) || defined(HAVE_RESID) || defined(HAVE_RESID_DTV) || defined(HAVE_RESIDFP)
+    stereo_menu = sid_stereo_menu_create();
+#endif
+    sid_menu_build(sid_c64_menu, sid_c64_menu_tail,
+                   sizeof sid_c64_menu_tail / sizeof sid_c64_menu_tail[0], stereo_menu, 0);
+    sid_menu_build(sid_c128_menu, sid_c128_menu_tail,
+                   sizeof sid_c128_menu_tail / sizeof sid_c128_menu_tail[0], stereo_menu, 1);
+
     /* create "Sid Model" menu */
     for (i = 0; list[i]; ++i) {}
 
@@ -1316,6 +957,15 @@ void uisid_menu_create(void)
  */
 void uisid_menu_shutdown(void)
 {
+    int i;
+
+    for (i = 0; i < sid_menu_num_allocs; i++) {
+        lib_free(sid_menu_allocs[i]);
+    }
+    lib_free(sid_menu_allocs);
+    sid_menu_allocs = NULL;
+    sid_menu_num_allocs = 0;
+
     if (sid_model_menu != NULL) {
         lib_free(sid_model_menu);
     }

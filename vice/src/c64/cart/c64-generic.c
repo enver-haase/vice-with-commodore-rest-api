@@ -34,6 +34,7 @@
 #undef CARTRIDGE_INCLUDE_SLOTMAIN_API
 #include "c64mem.h"
 #include "c64-generic.h"
+#include "cartio.h"
 #include "cartridge.h"
 #include "crt.h"
 #include "export.h"
@@ -120,6 +121,59 @@ static export_resource_t export_res_ultimax = {
 
 /* ---------------------------------------------------------------------*/
 
+/*
+    The cartridge emulation of the 1541-Ultimate and Ultimate64 gives a plain
+    cartridge a switch the real modules do not have: a write of %01xxxxxx to
+    $DFFF turns it off until the next reset (mode c_normal in the firmware's
+    all_carts_v5.vhd). Software written for that hardware relies on it, such
+    as its SID player cartridge, which hands the machine over that way.
+
+    A 16KiB cartridge gets the switch only when it is asked for before
+    attaching, so a module attached the usual way behaves like the module.
+*/
+
+static int ultimate_switch_requested = 0;
+static int ultimate_switched_off = 0;
+static io_source_list_t *ultimate_switch_list_item = NULL;
+
+static void ultimate_switch_store(uint16_t addr, uint8_t value)
+{
+    if ((value & 0xc0) == 0x40) {
+        DBG(("generic: switched off through $DFFF\n"));
+        cart_config_changed_slotmain(CMODE_RAM, CMODE_RAM, CMODE_WRITE);
+        ultimate_switched_off = 1;
+    }
+}
+
+static io_source_t ultimate_switch_device = {
+    "Ultimate cartridge switch", /* name of the device */
+    IO_DETACH_CART,              /* use cartridge ID to detach the device when involved in a read-collision */
+    IO_DETACH_NO_RESOURCE,       /* does not use a resource for detach */
+    0xdfff, 0xdfff, 0xff,        /* range for the device, reg:$dfff */
+    0,                           /* read is never valid, the reg is write only */
+    ultimate_switch_store,       /* store function */
+    NULL,                        /* NO poke function */
+    NULL,                        /* NO read function */
+    NULL,                        /* NO peek function */
+    NULL,                        /* NO dump function */
+    CARTRIDGE_GENERIC_16KB,      /* cartridge ID */
+    IO_PRIO_NORMAL,              /* normal priority, device read needs to be checked for collisions */
+    0,                           /* insertion order, gets filled in by the registration function */
+    IO_MIRROR_NONE               /* NO mirroring */
+};
+
+void generic_16kb_request_ultimate_switch(int enable)
+{
+    ultimate_switch_requested = enable;
+}
+
+int generic_16kb_ultimate_switched_off(void)
+{
+    return ultimate_switched_off;
+}
+
+/* ---------------------------------------------------------------------*/
+
 void generic_mmu_translate(unsigned int addr, uint8_t **base, int *start, int *limit)
 {
     switch (addr & 0xf000) {
@@ -160,6 +214,7 @@ void generic_8kb_config_init(void)
 
 void generic_16kb_config_init(void)
 {
+    ultimate_switched_off = 0;
     roml_bank = romh_bank = 0;
     cart_config_changed_slotmain(1, 1, CMODE_READ);
 }
@@ -203,6 +258,10 @@ static int generic_common_attach(int mode)
             DBG(("generic: attach 16KiB\n"));
             if (export_add(&export_res_16kb) < 0) {
                 return -1;
+            }
+            if (ultimate_switch_requested) {
+                ultimate_switched_off = 0;
+                ultimate_switch_list_item = io_source_register(&ultimate_switch_device);
             }
             break;
         case CARTRIDGE_ULTIMAX:
@@ -321,6 +380,10 @@ void generic_8kb_detach(void)
 void generic_16kb_detach(void)
 {
     DBG(("generic: detach 16KiB\n"));
+    if (ultimate_switch_list_item != NULL) {
+        io_source_unregister(ultimate_switch_list_item);
+        ultimate_switch_list_item = NULL;
+    }
     export_remove(&export_res_16kb);
 }
 

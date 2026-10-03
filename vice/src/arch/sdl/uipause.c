@@ -46,6 +46,10 @@ static int is_paused = 0;
 bool ui_pause_loop_iteration(void)
 {
     ui_dispatch_events();
+
+    /* let the machine keep serving clients while paused */
+    vsync_pause_hook();
+
     SDL_Delay(10);
 
     return is_paused;
