@@ -353,6 +353,7 @@ void restapi_request_free(restapi_request_t *req)
             archdep_remove(req->uploads[i]);
             lib_free(req->uploads[i]);
         }
+        lib_free(req->upload_names[i]);
     }
     lib_free(req->url);
     lib_free(req->content_type);
@@ -403,6 +404,40 @@ static char *write_tempfile(const char *data, size_t length)
     return filename;
 }
 
+/** \brief  The file name in a part's headers, as attachment_writer takes it
+ *
+ * From 'filename="..."' in the Content-Disposition, with leading dots and
+ * slashes removed; NULL when the part names no file.
+ */
+static char *part_filename(const char *headers, size_t length)
+{
+    const char *start = memfind(headers, length, "filename=\"", 10);
+    const char *end;
+    char *name;
+    char *p;
+
+    if (start == NULL) {
+        return NULL;
+    }
+    start += 10;
+    end = memfind(start, length - (size_t)(start - headers), "\"", 1);
+    if (end == NULL) {
+        return NULL;
+    }
+    while (start < end && (*start == '.' || *start == '\\' || *start == '/')) {
+        start++;
+    }
+    name = lib_malloc((size_t)(end - start) + 1);
+    memcpy(name, start, (size_t)(end - start));
+    name[end - start] = '\0';
+    for (p = name; *p != '\0'; p++) {
+        if (*p == '/' || *p == '\\') {
+            *p = '_';
+        }
+    }
+    return name;
+}
+
 /** \brief  Extract the file parts of a multipart/form-data body into temp files
  *
  * Mirrors what the firmware's attachment_writer does: the payload of every file
@@ -423,6 +458,7 @@ static void parse_multipart(restapi_request_t *req, const char *boundary)
         const char *next;
         size_t payload_len;
         int is_file;
+        char *name;
 
         part = memfind(cursor, remaining, delim, delim_len);
         if (part == NULL) {
@@ -447,6 +483,7 @@ static void parse_multipart(restapi_request_t *req, const char *boundary)
            the next handler act on a field value instead of the file */
         is_file = (memfind(cursor, (size_t)(headers_end - cursor),
                            "filename=", 9) != NULL);
+        name = is_file ? part_filename(cursor, (size_t)(headers_end - cursor)) : NULL;
 
         payload = headers_end + 4;
         remaining -= (size_t)(payload - cursor);
@@ -469,13 +506,17 @@ static void parse_multipart(restapi_request_t *req, const char *boundary)
             char *filename = write_tempfile(payload, payload_len);
 
             if (filename != NULL) {
+                req->upload_names[req->upload_count] = name;
                 req->uploads[req->upload_count++] = filename;
+                name = NULL;
             } else {
                 log_error(LOG_DEFAULT,
                           "restapi: could not spool uploaded data to a temporary file");
+                lib_free(name);
                 break;
             }
         }
+        lib_free(name);
 
         if (next == NULL) {
             break;
