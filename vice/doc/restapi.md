@@ -165,12 +165,14 @@ as the device's format does.
 `runners:sidplay` plays a tune the way the device does, with the device's own
 player: the "Ultimate SID Player" cartridge by Wilfred Bos, assembled from
 firmware 1.1.0's sources (`restapi-sidcrt/`, rebuilt by `restapi-sidcrt.sh`) with
-changes on top: the placement fix from the firmware's master (in 3.15a), and
-a SYSTEM line with the detected model for every SID the tune uses, as proposed in
-GideonZ/1541ultimate#949. The model can be detected only for a SID in
-`$D400`-`$D4FF`; a SID elsewhere shows as unknown. The `SID #2` and `SID #3`
-lines show the model the header asks for, and UNKNOWN when it leaves it open,
-rather than the model of the first SID.
+changes on top: the placement fix from the firmware's master (in 3.15a), and the
+info screen as proposed in GideonZ/1541ultimate#949: a FOUND line with the
+detected model for every SID the tune uses, and a WANT line with the model the
+header asks for, the second and third numbered, the clock on the first line of
+each block only. The model can be detected only for a SID in `$D400`-`$D4FF`; a
+SID elsewhere shows as unknown. A SID whose model the header leaves open shows
+the first SID's, as the SID file format defines it, and UNKNOWN when the first
+is open too.
 The tune's header is prepared as the firmware prepares it, the machine is reset
 into the cartridge, and the tune is written to memory when the cartridge asks for
 it. The cartridge then switches itself off through `$DFFF`, a switch of the
@@ -179,6 +181,18 @@ purpose only, and is detached. It replaces any cartridge attached before. Song
 lengths come from `SONGLENGTHS/<name>.ssl` next to the file, as on the device,
 or from a second uploaded file on `POST`. The player is GPLv3, where VICE is GPLv2
 or later, so this part cannot go upstream.
+
+A file named `.mus` or `.str` is Compute's Sidplayer data, which the device
+plays the same way with its MUS player cartridge, built from the same sources,
+and COMPUTE!'s Sidplayer by Craig Chamberlain and Harry Bratt at `$E000`. The
+header is made up as the firmware makes it: one song, three minutes long unless
+a `.ssl` says otherwise, the file name as title, flags for an 8580 and NTSC. The
+data goes to `$1000`. A stereo song, either embedded after the text or in the
+`.str` file next to the `.mus`, gets a second SID at `$D500`; choosing the `.str`
+plays the `.mus` with it. An upload is kept under the name it was sent with,
+so an uploaded `.mus` plays as MUS too; on the device it lands in the `/Temp`
+folder, where a `.str` of the same name would be found, while here it plays
+without one.
 
 The device maps its SIDs to the addresses the tune asks for, each with the model
 the tune asks for; VICE sets `SidStereo`, `Sid2AddressStart`/`Sid3AddressStart`
@@ -196,8 +210,9 @@ client than a wrong one.
 
 - `runners:modplay` — the MOD player drives the sample playback hardware of the
   Ultimate's FPGA, which VICE does not emulate.
-- `runners:sidplay` for Compute's Sidplayer data (`.mus`, `.str`, and SID files
-  flagged as such): the device plays those with a separate MUS player cartridge.
+- `runners:sidplay` for a SID file flagged as holding Compute's Sidplayer data:
+  the device takes those through its SID path with the data at `$1000`, which
+  is not reproduced here.
 - `machine:debugreg`, `machine:measure` — they read FPGA internals.
 - `machine:menu_button` — there is no device menu to open.
 - `drives:unlink` — like the `unlinked` mount mode, it keeps writes in the

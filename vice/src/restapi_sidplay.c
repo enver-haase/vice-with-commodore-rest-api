@@ -20,7 +20,13 @@
  *     emulation that VICE's generic 16KiB cartridge has on request. Then the
  *     cartridge is detached, and the machine is left playing.
  *
- *  The cartridge (restapi_sidcrt.h) is GPLv3, unlike VICE.
+ *  A file named .mus or .str is Compute's Sidplayer data, and the device plays
+ *  it the same way with its MUS player cartridge: the header is made up (one
+ *  song, the file name as title), the data goes to $1000 and COMPUTE!'s
+ *  Sidplayer to $E000, and a stereo song, one embedded after the text or the
+ *  .str file next to the .mus, gets a second SID at $D500.
+ *
+ *  The cartridges (restapi_sidcrt.h, restapi_muscrt.h) are GPLv3, unlike VICE.
  */
 
 /*
@@ -61,6 +67,7 @@
 #include "mem.h"
 #include "resources.h"
 #include "restapi_http.h"
+#include "restapi_muscrt.h"
 #include "restapi_sidcrt.h"
 #include "restapi_sidplay.h"
 #include "sid/sid.h"
@@ -77,6 +84,10 @@
 
 /** \brief  Song length used when none is known, in minutes */
 #define DEFAULT_SONG_LENGTH_SID 5
+#define DEFAULT_SONG_LENGTH_MUS 3
+
+/** \brief  Where the MUS player cartridge expects Compute's Sidplayer data */
+#define MUS_DATA_START          0x1000
 
 /** \brief  How long the cartridge may take to ask for the tune, in seconds
  *
@@ -103,6 +114,9 @@ static struct {
     uint16_t header_location;
     unsigned char *data;        /* the tune, from its load address on */
     size_t data_length;
+    int mus;                    /* Compute's Sidplayer data, MUS cartridge */
+    unsigned char *str_data;    /* the .str file next to a .mus, or NULL */
+    size_t str_length;
 } tune;
 
 static log_t sidplay_log = LOG_DEFAULT;
@@ -161,6 +175,7 @@ static void forget_tune(void)
         lib_free(tune.cartfile);
     }
     lib_free(tune.data);
+    lib_free(tune.str_data);
     memset(&tune, 0, sizeof(tune));
 }
 
@@ -189,7 +204,11 @@ static void build_cartridge(unsigned char *image, const char *sslfile,
     int i;
 
     memset(image, 0, SIDCRT_SIZE);
-    memcpy(image, restapi_sidcrt, sizeof(restapi_sidcrt));
+    if (tune.mus) {
+        memcpy(image, restapi_muscrt, sizeof(restapi_muscrt));
+    } else {
+        memcpy(image, restapi_sidcrt, sizeof(restapi_sidcrt));
+    }
     for (i = 0; i < 0x2000; i++) {
         image[0x2000 + i] = mem_bank_peek(rom, (uint16_t)(0xa000 + i), NULL);
     }
@@ -231,7 +250,7 @@ static void build_cartridge(unsigned char *image, const char *sslfile,
             seconds = 0;
         }
         if (minutes == 0 && seconds == 0) {
-            lengths[i] = DEFAULT_SONG_LENGTH_SID;
+            lengths[i] = tune.mus ? DEFAULT_SONG_LENGTH_MUS : DEFAULT_SONG_LENGTH_SID;
         }
     }
 }
@@ -291,6 +310,74 @@ static void configure_sids(void)
 /* the handshake                                                             */
 
 /** \brief  Hand the tune to the cartridge, as FileTypeSID::load() does */
+/** \brief  Set up Compute's Sidplayer around the data at $1000
+ *
+ * FileTypeSID::configureMusEnv(): find where the text after the three voices
+ * ends, take a second song after it, or else the .str file, as the stereo
+ * part, copy the player to $E000 and tell it where its data is.
+ *
+ * \param[in]  load_end  first address after the loaded data
+ */
+static void configure_mus_env(unsigned int load_end)
+{
+    unsigned int start = tune.start;
+    unsigned int text = start + 6
+                        + ((ram_peek((uint16_t)(start + 1)) + ram_peek((uint16_t)(start + 3))
+                            + ram_peek((uint16_t)(start + 5))) << 8)
+                        + ram_peek((uint16_t)start) + ram_peek((uint16_t)(start + 2))
+                        + ram_peek((uint16_t)(start + 4));
+    unsigned int next_song = load_end;
+    unsigned int i;
+    int stereo = 0;
+
+    for (i = text; i < load_end; i++) {
+        if (ram_peek((uint16_t)i) == 0) {
+            next_song = i + 3;
+            break;
+        }
+    }
+
+    if (next_song + 5 < load_end) {
+        /* one file that holds the stereo song too */
+        stereo = 1;
+        load_end = next_song;
+    } else if (tune.str_data != NULL && tune.str_length > 2) {
+        /* tryLoadStereoMus(): the .str file, without its load address */
+        unsigned int offset = load_end;
+
+        for (i = 2; i < tune.str_length && i - 2 < 0x10000; i++) {
+            ram_write((uint16_t)offset, tune.str_data[i]);
+            offset = (offset + 1) & 0xffff;
+        }
+        if (offset > load_end) {
+            tune.end = (uint16_t)offset;
+            stereo = 1;
+        }
+    }
+
+    for (i = 0; i < sizeof(restapi_musplayer); i++) {
+        ram_write((uint16_t)(0xe000 + i), restapi_musplayer[i]);
+    }
+    ram_write(0xec6e, (uint8_t)(start & 0xff));
+    ram_write(0xec70, (uint8_t)(start >> 8));     /* where the data is */
+
+    if (stereo) {
+        tune.header[0x0a] = 0x90;                   /* stereo init and play, */
+        tune.header[0x0b] = 0xfc;                   /* little endian */
+        tune.header[0x0c] = 0x96;
+        tune.header[0x0d] = 0xfc;
+        tune.header[0x7a] = 0x50;                   /* second SID at $D500, */
+        tune.header[0x77] |= 0x80;                  /* an 8580 */
+        ram_write(0xfc6e, (uint8_t)(load_end & 0xff));
+        ram_write(0xfc70, (uint8_t)(load_end >> 8)); /* where its data is */
+    }
+
+    if (tune.end >= 0xc400) {
+        tune.header[0x78] = 0x04;
+        tune.header[0x79] = 0x0c;
+    }
+}
+
 static void load_tune(void)
 {
     unsigned int addr;
@@ -302,6 +389,9 @@ static void load_tune(void)
     /* at most 64KiB, wrapping at $ffff like the device's DMA load */
     for (i = 0; i < tune.data_length && i < 0x10000; i++) {
         ram_write((uint16_t)(tune.start + i), tune.data[i]);
+    }
+    if (tune.mus) {
+        configure_mus_env((tune.start + (unsigned int)i) & 0xffff);
     }
 
     tune.header[0x7e] = (uint8_t)(tune.end & 0xff);
@@ -386,6 +476,77 @@ static unsigned char *read_file(const char *name, size_t *length)
     return data;
 }
 
+/** \brief  Whether \a file is Compute's Sidplayer data, by its extension
+ *
+ * FileTypeSID::play_file() looks at the extension only: MUS or STR.
+ */
+static int is_mus_file(const char *file)
+{
+    const char *dot = strrchr(file, '.');
+
+    return dot != NULL && (util_strcasecmp(dot, ".mus") == 0 || util_strcasecmp(dot, ".str") == 0);
+}
+
+/** \brief  \a file with its extension replaced by \a extension */
+static char *with_extension(const char *file, const char *extension)
+{
+    char *name = lib_strdup(file);
+    char *dot = strrchr(name, '.');
+    char *result;
+
+    if (dot != NULL) {
+        *dot = '\0';
+    }
+    result = util_concat(name, extension, NULL);
+    lib_free(name);
+    return result;
+}
+
+/** \brief  The header the device makes up for Compute's Sidplayer data
+ *
+ * FileTypeSID::createMusHeader(), big endian like a file's: one song at CIA
+ * speed, played by the Sidplayer at $EC60/$EC80, flags for MUS data on an
+ * 8580 and NTSC, author and year unknown, and the file name as title.
+ */
+static void make_mus_header(const char *file)
+{
+    char *directory = NULL;
+    char *name = NULL;
+    size_t size;
+    size_t i;
+
+    memset(tune.header, 0, sizeof(tune.header));
+    memcpy(tune.header, "PSID", 4);
+    tune.header[0x05] = 3;                      /* version 3: a second SID */
+    tune.header[0x07] = 0x7c;
+    tune.header[0x0a] = 0xec;                   /* init */
+    tune.header[0x0b] = 0x60;
+    tune.header[0x0c] = 0xec;                   /* play */
+    tune.header[0x0d] = 0x80;
+    tune.header[0x0f] = 1;                      /* one song */
+    tune.header[0x11] = 1;                      /* the first */
+    tune.header[0x15] = 1;                      /* CIA speed */
+    memcpy(tune.header + 0x36, "<?>", 3);       /* author */
+    memcpy(tune.header + 0x56, "19?? <?>", 8);  /* released */
+    tune.header[0x77] = 0x29;                   /* 8580, NTSC, MUS data */
+
+    /* the file name up to its extension, at most 32 characters, with
+       underscores as spaces */
+    util_fname_split(file, &directory, &name);
+    size = strlen(name);
+    for (i = size; i > 1; i--) {               /* not a dot in front */
+        if (name[i - 1] == '.') {
+            size = (i - 1 > 0x20) ? 0x20 : i - 1;
+            break;
+        }
+    }
+    for (i = 0; i < size && name[i] != '\0'; i++) {
+        tune.header[0x16 + i] = (unsigned char)((name[i] == '_') ? ' ' : name[i]);
+    }
+    lib_free(directory);
+    lib_free(name);
+}
+
 /** \brief  The song lengths file the device looks for next to \a file
  *
  * <dir>/SONGLENGTHS/<name>.ssl, as FileTypeSID::play_file() builds it.
@@ -415,6 +576,8 @@ void restapi_sidplay(restapi_request_t *req, restapi_response_t *resp)
     const char *file;
     char *sslfile;
     int songnr = restapi_param_int(req, "songnr", 0);
+    int mus;
+    const char *name;               /* what the file is called on the device */
     unsigned char *data;
     size_t length = 0;
     size_t pos;
@@ -436,6 +599,8 @@ void restapi_sidplay(restapi_request_t *req, restapi_response_t *resp)
             return;
         }
         file = req->uploads[0];
+        /* the device keeps an upload under the name it was sent with */
+        name = (req->upload_names[0] != NULL) ? req->upload_names[0] : file;
         sslfile = (req->upload_count > 1) ? lib_strdup(req->uploads[1]) : NULL;
     } else {
         file = restapi_param(req, "file");
@@ -444,6 +609,7 @@ void restapi_sidplay(restapi_request_t *req, restapi_response_t *resp)
             return;
         }
         sslfile = default_ssl_file(file);
+        name = file;
     }
 
     /* play_file() turns a song number of 0 or less into "the default song";
@@ -454,7 +620,20 @@ void restapi_sidplay(restapi_request_t *req, restapi_response_t *resp)
         return;
     }
 
-    data = read_file(file, &length);
+    mus = is_mus_file(name);
+    if (mus && req->method == RESTAPI_METHOD_POST) {
+        /* an uploaded .mus is played alone; for an uploaded .str the device
+           looks for its .mus next to it and finds none */
+        data = (util_strcasecmp(strrchr(name, '.'), ".mus") == 0) ? read_file(file, &length) : NULL;
+    } else if (mus) {
+        /* with the .str file chosen, the device still loads the .mus first */
+        char *musfile = with_extension(file, ".mus");
+
+        data = read_file(musfile, &length);
+        lib_free(musfile);
+    } else {
+        data = read_file(file, &length);
+    }
     if (data == NULL) {
         lib_free(sslfile);
         fail(resp, RESTAPI_HTTP_NOT_FOUND, "Cannot open file");
@@ -463,6 +642,23 @@ void restapi_sidplay(restapi_request_t *req, restapi_response_t *resp)
 
     /* a new tune replaces one still being handed over */
     finish();
+
+    if (mus) {
+        char *strfile = with_extension(file, ".str");
+
+        tune.mus = 1;
+        make_mus_header(name);
+        if (req->method != RESTAPI_METHOD_POST) {
+            tune.str_data = read_file(strfile, &tune.str_length);
+        }
+        lib_free(strfile);
+        tune.header_version = 3;
+        data_offset = 0;
+        number_of_songs = 1;
+        pos = 2;                        /* past the load address */
+        tune.start = MUS_DATA_START;
+        goto loaded;
+    }
 
     memset(tune.header, 0, sizeof(tune.header));
     memcpy(tune.header, data, (length < 0x7e) ? length : 0x7e);
@@ -500,6 +696,8 @@ void restapi_sidplay(restapi_request_t *req, restapi_response_t *resp)
         tune.start = (uint16_t)((pos + 1 < length) ? (data[pos] | (data[pos + 1] << 8)) : 0);
         pos += 2;
     }
+
+loaded:
     /* sic: the device takes two bytes off the length whether or not the data
        began with a load address, so its end address may fall short by two */
     tune.end = (uint16_t)(tune.start + ((int)length - data_offset - 2));
