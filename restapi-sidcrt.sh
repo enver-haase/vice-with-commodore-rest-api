@@ -10,9 +10,11 @@
 # the detected model for every SID the tune uses; and beea28f2, also from #949,
 # which makes the SID #2 line show SID #1's model when the header leaves its
 # model open, as the SID file format defines it: 1.1.0 meant to, and did for
-# the third SID, but a missing flags mask made the second show UNKNOWN. The
-# only difference left from that firmware's player is the title line, which
-# keeps 1.1.0's wording.
+# the third SID, but a missing flags mask made the second show UNKNOWN; and
+# 610b191b, also from #949, which labels the measured lines FOUND and the
+# requested ones WANT, numbered for more than one SID, with an empty line
+# between the two. The only difference left from that firmware's player is
+# the title line, which keeps 1.1.0's wording.
 # They are assembled the way that firmware's Makefile does it, with the 64tass
 # it ships (tools/64tass, V1.53.1515): newer releases reject the source. That
 # binary is x86-64 Linux, so it runs in Docker here.
@@ -21,7 +23,7 @@
 # different one means the sources or the assembler changed.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-expected=84b57caf8bcffd3181088a50724b61c5070fa8f8924cd0c1cb6a4cc1841ae11c
+expected=4a905e298a621fcddc4e747a55fa98897ee42bdf6736c105567cf06cd8fb745a
 tool=https://raw.githubusercontent.com/enver-haase/1541ultimate/1.1.0/tools/64tass/64tass
 
 work=$(mktemp -d)
@@ -55,8 +57,8 @@ open(sys.argv[2], 'w').write('''/** \\file   restapi_sidcrt.h
  *  "Ultimate SID Player V2.0d", Copyright (c) 2009-2023 Wilfred Bos / Gideon
  *  Zweijtzer, part of the 1541-Ultimate firmware and licensed with it under
  *  the GNU General Public License version 3. Assembled from the sources at the
- *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11, e84e1560 and
- *  beea28f2, as restapi-sidcrt.sh describes, with the firmware's own 64tass
+ *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11, e84e1560,
+ *  beea28f2 and 610b191b, as restapi-sidcrt.sh describes, with the firmware's own 64tass
  *  V1.53.1515.
  *
  *  %d bytes, sha256 %s
