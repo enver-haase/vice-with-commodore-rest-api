@@ -6,20 +6,19 @@
 # firmware at tag 1.1.0 (Commodore's release, commit 7b628eb1), with changes on
 # top: f0c51d11 from the firmware's master (in 3.15a, not in 1.1.0), "Fix
 # installing extra player in some scenario when there is enough space after
-# load end address"; e84e1560 from GideonZ/1541ultimate#949, a SYSTEM line with
-# the detected model for every SID the tune uses; and beea28f2, also from #949,
-# which makes the SID #2 line show SID #1's model when the header leaves its
-# model open, as the SID file format defines it: 1.1.0 meant to, and did for
-# the third SID, but a missing flags mask made the second show UNKNOWN; and
-# 610b191b, also from #949, which labels the measured lines FOUND and the
-# requested ones WANT, numbered for more than one SID, with an empty line
-# between the two; 237ade3b, which shows the clock once per block and
-# numbers only the second and third SID; 64b3b337, which ends the first
-# WANT line in the song's speed, (VBI) or (CIA), and says ANY for a tune made
-# for both models or both clocks; and c2327a93, which measures a second or
-# third SID at any address and shows UNKNOWN where no SID, or only a mirror
-# of the one at $D400, answers. The only difference left from that
-# firmware's players is the title line, which keeps 1.1.0's wording.
+# load end address", and the player commits of GideonZ/1541ultimate#949 up to
+# cdb9c23f: the info screen as a table under a yellow heading row, ADDR,
+# MODEL, VIDEO and IRQ; the NEEDS lines the header asks for, then the FOUND
+# lines measured at every address the tune names; UNKNOWN where no SID, or
+# only a mirror of the one at $D400, answers; an UltiSID set to 8580 told from
+# a 6581 by its combined waveforms; SID #1's model for a SID the header leaves
+# open, as the SID file format defines it; and VBI, CIA or RSID for the
+# song's interrupt. The only difference left from that firmware's players is
+# the title line, which keeps 1.1.0's wording.
+#
+# #949 also moves the plain-letter conversion of title, author and released
+# out of the player into the code that hands it the header; here that is
+# restapi_sidplay.c, with the firmware's table.
 #
 # The MUS player cartridge (muscrt.asm) is built from the same sources, and
 # musplayer.asm is COMPUTE!'s Sidplayer by Craig Chamberlain and Harry Bratt as
@@ -33,8 +32,8 @@
 # different one means the sources or the assembler changed.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-expected=c379c96cbc94429475b58d40a05e75ae82078288dafd7518071a834a4d00821e
-expected_mus=1bde4405c800b26f3d739bc00f237a88fc80074290d9d845d0ccf7d6aff0d066
+expected=ca7a76c3c839cdec35e073669b13ddc89635286c923b57646ec4652fc086480b
+expected_mus=7a70216fa7f1ddb17a889909b8acc96f3de3d47889c504bf9d0975e112e1610c
 expected_musplayer=92bb91eb94556efa404a5af03104cc387851c7c7080e3238bba477b50db66999
 tool=https://raw.githubusercontent.com/enver-haase/1541ultimate/1.1.0/tools/64tass/64tass
 
@@ -58,9 +57,9 @@ python3 - "$work/target" "$here/vice/src" "$expected" "$expected_mus" "$expected
 import hashlib, sys
 target, src, want_sid, want_mus, want_player = sys.argv[1:6]
 
-SOURCES = (" *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11, e84e1560,\n"
-           " *  beea28f2, 610b191b, 237ade3b, 64b3b337 and c2327a93, as\n"
-           " *  restapi-sidcrt.sh describes, with the firmware's own 64tass V1.53.1515.")
+SOURCES = (" *  firmware's tag 1.1.0 (commit 7b628eb1) plus commit f0c51d11 and the player\n"
+           " *  commits of GideonZ/1541ultimate#949 up to cdb9c23f, as restapi-sidcrt.sh\n"
+           " *  describes, with the firmware's own 64tass V1.53.1515.")
 
 
 def load(name, want):
