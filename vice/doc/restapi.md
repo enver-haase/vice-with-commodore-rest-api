@@ -172,7 +172,8 @@ header asks for, the second and third numbered, the clock on the first line of
 each block only. The model can be detected only for a SID in `$D400`-`$D4FF`; a
 SID elsewhere shows as unknown. A SID whose model the header leaves open shows
 the first SID's, as the SID file format defines it, and UNKNOWN when the first
-is open too.
+is open too. The first WANT line ends in the song's speed, (VBI) or (CIA), and a
+tune made for both models or both clocks shows ANY.
 The tune's header is prepared as the firmware prepares it, the machine is reset
 into the cartridge, and the tune is written to memory when the cartridge asks for
 it. The cartridge then switches itself off through `$DFFF`, a switch of the
