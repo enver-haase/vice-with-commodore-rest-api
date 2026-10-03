@@ -5,6 +5,8 @@
 #   test.d64  a disk holding it, named HELLO
 #   test.crt  an 8K cartridge that cold-starts and prints "CRT OK"
 #   test.sid  a three song PSID that marks which song runs, and test-mus.sid
+#   test.mus  Compute's Sidplayer data whose three voices only halt, and
+#             stereo.mus with stereo.str, the same as a stereo song
 #
 # Needs python3 and the c1541 built in $VICE_TREE/src (default: ./vice).
 set -e
@@ -58,6 +60,16 @@ open("test.sid", "wb").write(bytes(psid) + b"\x00\x10" + tune)
 # the same with the flag for Compute's Sidplayer data, which takes the MUS player
 psid[0x77] |= 1
 open("test-mus.sid", "wb").write(bytes(psid) + b"\x00\x10" + tune)
+
+# Compute's Sidplayer files: a load address, the three voice lengths, each
+# voice a single halt command, and the text, ended by a zero
+def mus(text):
+    voices = bytes((0x01, 0x4f)) * 3
+    return b"\x00\x10" + bytes((2, 0, 2, 0, 2, 0)) + voices + text + b"\r\x00"
+
+open("test.mus", "wb").write(mus(b"REST MUS"))
+open("stereo.mus", "wb").write(mus(b"REST MUS LEFT"))
+open("stereo.str", "wb").write(mus(b"REST MUS RIGHT"))
 EOF
 
 rm -f test.d64

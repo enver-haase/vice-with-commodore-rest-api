@@ -7,8 +7,8 @@
  *  Zweijtzer, part of the 1541-Ultimate firmware and licensed with it under
  *  the GNU General Public License version 3. Assembled from the sources at the
  *  firmware's tag 1.1.0 (commit 7b628eb1) plus commits f0c51d11, e84e1560,
- *  beea28f2, 610b191b and 237ade3b, as restapi-sidcrt.sh describes, with the firmware's own 64tass
- *  V1.53.1515.
+ *  beea28f2, 610b191b and 237ade3b, as restapi-sidcrt.sh describes, with
+ *  the firmware's own 64tass V1.53.1515.
  *
  *  8163 bytes, sha256 b3f7e88651120b38b29f184c4284834bcdf3bcc8c20223b7798a162786800a09
  */
