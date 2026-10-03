@@ -169,8 +169,8 @@ changes on top: the placement fix from the firmware's master (in 3.15a), and the
 info screen as proposed in GideonZ/1541ultimate#949: a FOUND line with the
 detected model for every SID the tune uses, and a WANT line with the model the
 header asks for, the second and third numbered, the clock on the first line of
-each block only. The model can be detected only for a SID in `$D400`-`$D4FF`; a
-SID elsewhere shows as unknown. A SID whose model the header leaves open shows
+each block only. The model is measured at any address; one where no SID, or
+only a mirror of the SID at `$D400`, answers shows as unknown. A SID whose model the header leaves open shows
 the first SID's, as the SID file format defines it, and UNKNOWN when the first
 is open too. The first WANT line ends in the song's speed, (VBI) or (CIA), and a
 tune made for both models or both clocks shows ANY.
