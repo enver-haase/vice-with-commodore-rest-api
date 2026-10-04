@@ -1,0 +1,147 @@
+# Keeps this fork in step with VICE-Team/svn-mirror.
+#
+#   main      = upstream main + merge of rest-api + merge of automation
+#   rest-api  = the REST API commits, rebased onto upstream main
+#   automation = this workflow, kept off rest-api so that stays a clean patch
+#
+# When upstream has moved, or rest-api or automation changed, rest-api is
+# rebased, built headless and run through restapi-regress.sh. Only when that
+# passes are rest-api and a freshly composed main force-pushed. A conflict or
+# a failing build/test pushes nothing and opens (or comments on) an issue.
+#
+# Pushing goes through the SYNC_DEPLOY_KEY deploy key: the built-in token may
+# not push commits that touch .github/workflows, and upstream's do.
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rebuild, test and recompose even if nothing changed'
+        type: boolean
+        default: false
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync:
+    if: github.repository == 'enver-haase/vice-with-commodore-rest-api'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: rest-api
+          fetch-depth: 0
+          ssh-key: ${{ secrets.SYNC_DEPLOY_KEY }}
+
+      - name: Check whether anything changed
+        id: state
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git remote add upstream https://github.com/VICE-Team/svn-mirror.git
+          git fetch --no-tags upstream main
+          git fetch --no-tags origin main rest-api automation
+          up=$(git rev-parse upstream/main)
+          echo "upstream=$up" >> "$GITHUB_OUTPUT"
+          echo "old_main=$(git rev-parse origin/main)" >> "$GITHUB_OUTPUT"
+          echo "old_rest_api=$(git rev-parse origin/rest-api)" >> "$GITHUB_OUTPUT"
+          # main is current when its merges are exactly upstream, rest-api
+          # and automation, in that order
+          if [ "$(git rev-parse -q --verify origin/main^1^1)" = "$up" ] &&
+             [ "$(git rev-parse -q --verify origin/main^1^2)" = "$(git rev-parse origin/rest-api)" ] &&
+             [ "$(git rev-parse -q --verify origin/main^2)" = "$(git rev-parse origin/automation)" ] &&
+             [ "${{ inputs.force }}" != "true" ]; then
+            echo "Up to date with upstream ${up:0:10}."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rebase rest-api onto upstream
+        if: steps.state.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git checkout -B rest-api origin/rest-api
+          if ! git rebase upstream/main; then
+            git status
+            git rebase --abort
+            echo "::error::rest-api does not rebase cleanly onto upstream ${{ steps.state.outputs.upstream }}"
+            exit 1
+          fi
+          git log --oneline upstream/main..rest-api
+
+      - name: Install build dependencies
+        if: steps.state.outputs.changed == 'true'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake build-essential byacc \
+                                  dos2unix flex libevdev-dev libpng-dev \
+                                  libcurl4-openssl-dev xa65 \
+                                  zsh netcat-openbsd curl python3
+
+      - name: Build headless
+        if: steps.state.outputs.changed == 'true'
+        shell: bash
+        run: |
+          cd vice
+          ./autogen.sh
+          ./configure --enable-option-checking=fatal --enable-headlessui \
+                      --without-pulse --without-alsa --disable-html-docs
+          make -j"$(nproc)" -s --no-print-directory
+
+      - name: REST API regression suite
+        if: steps.state.outputs.changed == 'true'
+        shell: bash
+        run: |
+          ./restapi-fixtures.sh "$RUNNER_TEMP/fixtures"
+          RESTAPI_FIXTURES="$RUNNER_TEMP/fixtures" zsh restapi-regress.sh
+
+      - name: Upload emulator log
+        if: failure() && steps.state.outputs.changed == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: regress-log
+          path: ${{ runner.temp }}/fixtures/regress.log
+          if-no-files-found: ignore
+
+      - name: Compose main and push
+        if: steps.state.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git checkout -B main upstream/main
+          git merge --no-ff rest-api -m "Merge branch 'rest-api'" \
+                    -m "Adds the Ultimate64 compatible REST API server to x64, x64sc and xscpu64; see vice/doc/restapi.md."
+          git merge --no-ff origin/automation -m "Merge branch 'automation'" \
+                    -m "Adds the workflow that keeps this fork in step with upstream."
+          git push --atomic \
+            --force-with-lease=rest-api:${{ steps.state.outputs.old_rest_api }} \
+            --force-with-lease=main:${{ steps.state.outputs.old_main }} \
+            origin rest-api main
+
+      - name: Report failure
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Upstream sync failed"
+          body="Run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} failed against upstream ${{ steps.state.outputs.upstream }}. Nothing was pushed."
+          # gh would pick the fork's parent, which has issues disabled
+          n=$(gh issue list -R "$GITHUB_REPOSITORY" --state open --search "in:title \"$title\"" --json number -q '.[0].number')
+          if [ -n "$n" ]; then
+            gh issue comment -R "$GITHUB_REPOSITORY" "$n" --body "$body"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi
