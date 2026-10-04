@@ -7,7 +7,7 @@
 # top: f0c51d11 from the firmware's master (in 3.15a, not in 1.1.0), "Fix
 # installing extra player in some scenario when there is enough space after
 # load end address", and the player commits of GideonZ/1541ultimate#949 up to
-# cdb9c23f: the info screen as a table under a yellow heading row, ADDR,
+# 20d0a99e: the info screen as a table under a yellow heading row, ADDR,
 # MODEL, VIDEO and IRQ; the NEEDS lines the header asks for, then the FOUND
 # lines measured at every address the tune names; UNKNOWN where no SID, or
 # only a mirror of the one at $D400, answers; an UltiSID set to 8580 told from
@@ -32,8 +32,8 @@
 # different one means the sources or the assembler changed.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
-expected=ca7a76c3c839cdec35e073669b13ddc89635286c923b57646ec4652fc086480b
-expected_mus=7a70216fa7f1ddb17a889909b8acc96f3de3d47889c504bf9d0975e112e1610c
+expected=83a8bc982a60712ba873eae6a7ca29a987ccb616ddef66c8dc1e32581239cd53
+expected_mus=531b9cae07bb224ce598c4543be8a14f659c7146c1e544bef5c2dfa963f5bffe
 expected_musplayer=92bb91eb94556efa404a5af03104cc387851c7c7080e3238bba477b50db66999
 tool=https://raw.githubusercontent.com/enver-haase/1541ultimate/1.1.0/tools/64tass/64tass
 
@@ -58,7 +58,7 @@ import hashlib, sys
 target, src, want_sid, want_mus, want_player = sys.argv[1:6]
 
 SOURCES = (" *  firmware's tag 1.1.0 (commit 7b628eb1) plus commit f0c51d11 and the player\n"
-           " *  commits of GideonZ/1541ultimate#949 up to cdb9c23f, as restapi-sidcrt.sh\n"
+           " *  commits of GideonZ/1541ultimate#949 up to 20d0a99e, as restapi-sidcrt.sh\n"
            " *  describes, with the firmware's own 64tass V1.53.1515.")
 
 
