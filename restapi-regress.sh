@@ -182,20 +182,20 @@ sleep 4
 check "MUS data at 1000" "$(mem 1000 8)" "020002000200014f"
 check "MUS player"       "$(infoscreen)" 'ULTIMATE MUS PLAYER'
 check "title from name"  "$(infoscreen)" 'TITLE : TEST'
-check "one SID"          "$(infoscreen)" 'WANT  : $D400 : 8580 / NTSC (CIA)'
+check "one SID"          "$(infoscreen)" 'NEEDS : $D400 : 8580    : NTSC    : CIA'
 check "cartridge gone"   "$(mem 8004 5)" "0000000000"
 # choosing the .str plays the .mus with it, and a second SID at $D500
 check "PUT .str"         "$(curl -s -m 5 -X PUT "$B/runners:sidplay?file=$S/stereo.str")" '"errors":[]'
 sleep 4
 check "stereo title"     "$(infoscreen)" 'TITLE : STEREO'
-check "second SID"       "$(infoscreen)" 'WANT 2: $D500 : 8580'
+check "second SID"       "$(infoscreen)" 'NEEDS2: $D500 : 8580'
 # an upload keeps the name it was sent with, so its extension still tells a
 # .mus from a SID file; its .str is not next to it, and an uploaded .str finds
 # no .mus
 check "POST .mus"        "$(curl -s -m 10 -X POST -F file=@$S/stereo.mus $B/runners:sidplay)" '"errors":[]'
 sleep 4
-check "uploaded, mono"   "$(infoscreen)" 'WANT  : $D400 : 8580 / NTSC (CIA)'
-[[ "$(infoscreen)" != *'WANT 2'* ]] && ok "no second SID for an upload" || bad "an uploaded .mus found its .str"
+check "uploaded, mono"   "$(infoscreen)" 'NEEDS : $D400 : 8580    : NTSC    : CIA'
+[[ "$(infoscreen)" != *'NEEDS2'* ]] && ok "no second SID for an upload" || bad "an uploaded .mus found its .str"
 check "POST .str"        "$(curl -s -m 10 -X POST -F file=@$S/stereo.str $B/runners:sidplay)" "Cannot open file"
 check "POST raw .mus"    "$(curl -s -m 10 -X POST --data-binary @$S/test.mus -H 'Content-Type: application/octet-stream' $B/runners:sidplay)" "Error detected in file format"
 
