@@ -105,6 +105,7 @@
 #include "protopad.h"
 #include "psid.h"
 #include "resources.h"
+#include "restapi.h"
 #include "rs232drv.h"
 #include "rsuser.h"
 #include "rushware_keypad.h"
@@ -906,11 +907,16 @@ int machine_resources_init(void)
         init_resource_fail("drive");
         return -1;
     }
+    if (restapi_resources_init() < 0) {
+        init_resource_fail("restapi");
+        return -1;
+    }
     return 0;
 }
 
 void machine_resources_shutdown(void)
 {
+    restapi_resources_shutdown();
     serial_shutdown();
     c64_resources_shutdown();
     plus60k_resources_shutdown();
@@ -1065,6 +1071,10 @@ int machine_cmdline_options_init(void)
         init_cmdline_options_fail("cartridge");
         return -1;
     }
+    if (restapi_cmdline_options_init() < 0) {
+        init_cmdline_options_fail("restapi");
+        return -1;
+    }
     return 0;
 }
 
@@ -1170,6 +1180,8 @@ int machine_specific_init(void)
 
     /* Initialize vsync and register our hook function.  */
     vsync_init(machine_vsync_hook);
+    /* a paused machine must still hear the REST call that resumes it */
+    vsync_set_pause_hook(restapi_vsync_hook);
     vsync_set_machine_parameter(machine_timing.rfsh_per_sec, machine_timing.cycles_per_sec);
 
     /* Initialize native sound chip */
@@ -1350,6 +1362,8 @@ static void machine_vsync_hook(void)
     drive_vsync_hook();
 
     screenshot_record();
+
+    restapi_vsync_hook();
 }
 
 void machine_set_restore_key(int v)
