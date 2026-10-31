@@ -2649,6 +2649,9 @@ bool ui_pause_loop_iteration(void)
         return false;
     }
 
+    /* let the machine keep serving clients while paused */
+    vsync_pause_hook();
+
     /* Otherwise give the UI the lock for a while */
     mainlock_yield_and_sleep(tick_per_second() / 60);
 
