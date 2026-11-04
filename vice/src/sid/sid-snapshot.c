@@ -129,14 +129,15 @@ static int intended_sid_engine = -1;
    ARRAY | sid data |   1.5+  | 32 BYTES of SID registers
  */
 
-static const char snap_module_name_simple1[] = "SID";
-static const char snap_module_name_simple2[] = "SID2";
-static const char snap_module_name_simple3[] = "SID3";
-static const char snap_module_name_simple4[] = "SID4";
-static const char snap_module_name_simple5[] = "SID5";
-static const char snap_module_name_simple6[] = "SID6";
-static const char snap_module_name_simple7[] = "SID7";
-static const char snap_module_name_simple8[] = "SID8";
+/* module names: "SID" for the first SID, "SID2" and up for the further ones */
+static void snap_module_name_simple_get(char *name, size_t size, int sidnr)
+{
+    if (sidnr == 0) {
+        snprintf(name, size, "SID");
+    } else {
+        snprintf(name, size, "SID%d", sidnr + 1);
+    }
+}
 
 #define SNAP_MAJOR_SIMPLE 1
 #define SNAP_MINOR_SIMPLE 6
@@ -148,37 +149,11 @@ static int sid_snapshot_write_module_simple(snapshot_t *s, int sidnr)
     int sids = 0;
     int model = 0;
     snapshot_module_t *m;
-    const char *snap_module_name_simple = NULL;
+    char snap_module_name_simple[16];
     int sid_address = 0;
     int chip_model = SID_MODEL_SAME_AS_FIRST;
 
-    switch (sidnr) {
-        default:
-        case 0:
-            snap_module_name_simple = snap_module_name_simple1;
-            break;
-        case 1:
-            snap_module_name_simple = snap_module_name_simple2;
-            break;
-        case 2:
-            snap_module_name_simple = snap_module_name_simple3;
-            break;
-        case 3:
-            snap_module_name_simple = snap_module_name_simple4;
-            break;
-        case 4:
-            snap_module_name_simple = snap_module_name_simple5;
-            break;
-        case 5:
-            snap_module_name_simple = snap_module_name_simple6;
-            break;
-        case 6:
-            snap_module_name_simple = snap_module_name_simple7;
-            break;
-        case 7:
-            snap_module_name_simple = snap_module_name_simple8;
-            break;
-    }
+    snap_module_name_simple_get(snap_module_name_simple, sizeof snap_module_name_simple, sidnr);
 
     m = snapshot_module_create(s, snap_module_name_simple, SNAP_MAJOR_SIMPLE, SNAP_MINOR_SIMPLE);
 
@@ -239,38 +214,12 @@ static int sid_snapshot_read_module_simple(snapshot_t *s, int sidnr)
     uint8_t major_version, minor_version;
     snapshot_module_t *m;
     uint8_t tmp[35];
-    const char *snap_module_name_simple = NULL;
+    char snap_module_name_simple[16];
     int sids = 0;
     int sid_address;
     int chip_model;
 
-    switch (sidnr) {
-        default:
-        case 0:
-            snap_module_name_simple = snap_module_name_simple1;
-            break;
-        case 1:
-            snap_module_name_simple = snap_module_name_simple2;
-            break;
-        case 2:
-            snap_module_name_simple = snap_module_name_simple3;
-            break;
-        case 3:
-            snap_module_name_simple = snap_module_name_simple4;
-            break;
-        case 4:
-            snap_module_name_simple = snap_module_name_simple5;
-            break;
-        case 5:
-            snap_module_name_simple = snap_module_name_simple6;
-            break;
-        case 6:
-            snap_module_name_simple = snap_module_name_simple7;
-            break;
-        case 7:
-            snap_module_name_simple = snap_module_name_simple8;
-            break;
-    }
+    snap_module_name_simple_get(snap_module_name_simple, sizeof snap_module_name_simple, sidnr);
 
     m = snapshot_module_open(s, snap_module_name_simple, &major_version, &minor_version);
 
@@ -1096,23 +1045,7 @@ static int sid_snapshot_read_module_extended(snapshot_t *s, int sidnr)
     if (intended_sid_engine != sid_engine) {
         siddata = sid_get_siddata(sidnr);
         for (i = 0; i < 32; ++i) {
-            if (!sidnr) {
-                sid_store((uint16_t)i, siddata[i]);
-            } else if (sidnr == 1) {
-                sid2_store((uint16_t)i, siddata[i]);
-            } else if (sidnr == 2) {
-                sid3_store((uint16_t)i, siddata[i]);
-            } else if (sidnr == 3) {
-                sid4_store((uint16_t)i, siddata[i]);
-            } else if (sidnr == 4) {
-                sid5_store((uint16_t)i, siddata[i]);
-            } else if (sidnr == 5) {
-                sid6_store((uint16_t)i, siddata[i]);
-            } else if (sidnr == 6) {
-                sid7_store((uint16_t)i, siddata[i]);
-            } else if (sidnr == 7) {
-                sid8_store((uint16_t)i, siddata[i]);
-            }
+            sid_store_chip_nr((uint16_t)i, siddata[i], sidnr);
         }
         return 0;
     }
