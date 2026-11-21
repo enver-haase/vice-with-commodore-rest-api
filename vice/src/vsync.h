@@ -46,6 +46,11 @@ void vsync_reset_hook(void);
 int vsync_resources_init(void);
 int vsync_cmdline_options_init(void);
 void vsync_init(void (*hook)(void));
+
+/* Hook the UI calls on every round of its pause loop, for machines that keep
+   serving something while paused; none unless the machine sets one */
+void vsync_set_pause_hook(void (*hook)(void));
+void vsync_pause_hook(void);
 void vsync_shutdown(void);
 void vsync_set_machine_parameter(double refresh_rate, long cycles);
 double vsync_get_refresh_frequency(void);

@@ -697,13 +697,8 @@ static GtkWidget *create_num_sids_widget(void)
     GtkWidget *grid;
     GtkWidget *label;
     GtkWidget *spin;
-    int        max_sids = SOUND_SIDS_MAX;
+    int        max_sids = sid_machine_get_max_sids();
 
-#if 0
-    if (machine_class == VICE_MACHINE_VSID) {
-        max_sids = SOUND_SIDS_MAX_PSID;
-    }
-#endif
     grid = gtk_grid_new();
     gtk_grid_set_row_spacing(GTK_GRID(grid), 8);
 

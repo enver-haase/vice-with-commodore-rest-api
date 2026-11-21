@@ -59,15 +59,8 @@
 #include "usbsid.h"
 #endif
 
-static char *sid2_address_range = NULL;
-static char *sid3_address_range = NULL;
-static char *sid4_address_range = NULL;
-static char *sid5_address_range = NULL;
-static char *sid6_address_range = NULL;
-static char *sid7_address_range = NULL;
-static char *sid8_address_range = NULL;
-static char *sid9_address_range = NULL;
-static char *sid10_address_range = NULL;
+static char *sid_address_range[SOUND_SIDS_MAX];
+static char *sid_extra_range = NULL;
 
 struct engine_s {
     const char *name;
@@ -329,36 +322,40 @@ static cmdline_option_t stereo_cmdline_options[] =
 {
     { "-sidextra", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
       NULL, NULL, "SidStereo", NULL,
-      "<amount>", "amount of extra SID chips. (0..7)" },
-    { "-sid2address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid2AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid3address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid3AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid4address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid4AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid5address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid5AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid6address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid6AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid7address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid7AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid8address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid8AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid9address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid9AddressStart", NULL,
-      "<Base address>", NULL },
-    { "-sid10address", SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
-      NULL, NULL, "Sid10AddressStart", NULL,
+      "<amount>", NULL },
+    CMDLINE_LIST_END
+};
+
+static char *generate_sid_address_range(int nr);
+
+/* template for -sid2address and up, registered once for each SID but the first */
+static cmdline_option_t sid_address_cmdline_options[] =
+{
+    { NULL, SET_RESOURCE, CMDLINE_ATTRIB_NEED_ARGS,
+      NULL, NULL, NULL, NULL,
       "<Base address>", NULL },
     CMDLINE_LIST_END
 };
+
+static int sid_address_cmdline_options_init(void)
+{
+    int chipno;
+    int result;
+
+    for (chipno = 1; chipno < sid_machine_get_max_sids(); chipno++) {
+        sid_address_range[chipno] = generate_sid_address_range(chipno + 1);
+        sid_address_cmdline_options[0].name = lib_msprintf("-sid%daddress", chipno + 1);
+        sid_address_cmdline_options[0].resource_name = lib_msprintf("Sid%dAddressStart", chipno + 1);
+        sid_address_cmdline_options[0].description = sid_address_range[chipno];
+        result = cmdline_register_options(sid_address_cmdline_options);
+        lib_free(sid_address_cmdline_options[0].name);
+        lib_free(sid_address_cmdline_options[0].resource_name);
+        if (result < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
 
 /* template for -sid2model and up, registered once for each SID but the first */
 static cmdline_option_t sid_chip_model_cmdline_options[] =
@@ -402,36 +399,7 @@ static char *generate_sid_address_range(int nr)
 {
     char *temp1, *temp2, *temp3;
 
-    switch (nr) {
-        case 2:
-            temp3 = lib_strdup("Specify base address for 2nd SID. (");
-            break;
-        case 3:
-            temp3 = lib_strdup("Specify base address for 3rd SID. (");
-            break;
-        case 4:
-            temp3 = lib_strdup("Specify base address for 4th SID. (");
-            break;
-        case 5:
-            temp3 = lib_strdup("Specify base address for 5th SID. (");
-            break;
-        case 6:
-            temp3 = lib_strdup("Specify base address for 6th SID. (");
-            break;
-        case 7:
-            temp3 = lib_strdup("Specify base address for 7th SID. (");
-            break;
-        case 8:
-            temp3 = lib_strdup("Specify base address for 8th SID. (");
-            break;
-        case 9:
-            temp3 = lib_strdup("Specify base address for 9th SID. (");
-            break;
-        default:
-        case 10:
-            temp3 = lib_strdup("Specify base address for 10th SID. (");
-            break;
-    }
+    temp3 = lib_msprintf("Specify base address for SID #%d. (", nr);
 
     temp1 = util_gen_hex_address_list(0xd420, 0xd500, 0x20);
     temp2 = util_concat(temp3, temp1, "/", NULL);
@@ -738,27 +706,13 @@ int sid_cmdline_options_init(int sid_type)
         (machine_class != VICE_MACHINE_CBM5x0) &&
         (machine_class != VICE_MACHINE_CBM6x0)) {
 
-        sid2_address_range = generate_sid_address_range(2);
-        sid3_address_range = generate_sid_address_range(3);
-        sid4_address_range = generate_sid_address_range(4);
-        sid5_address_range = generate_sid_address_range(5);
-        sid6_address_range = generate_sid_address_range(6);
-        sid7_address_range = generate_sid_address_range(7);
-        sid8_address_range = generate_sid_address_range(8);
-        sid9_address_range = generate_sid_address_range(9);
-        sid10_address_range = generate_sid_address_range(10);
-
-        stereo_cmdline_options[1].description = sid2_address_range;
-        stereo_cmdline_options[2].description = sid3_address_range;
-        stereo_cmdline_options[3].description = sid4_address_range;
-        stereo_cmdline_options[4].description = sid5_address_range;
-        stereo_cmdline_options[5].description = sid6_address_range;
-        stereo_cmdline_options[6].description = sid7_address_range;
-        stereo_cmdline_options[7].description = sid8_address_range;
-        stereo_cmdline_options[8].description = sid9_address_range;
-        stereo_cmdline_options[9].description = sid10_address_range;
+        sid_extra_range = lib_msprintf("amount of extra SID chips. (0..%d)", sid_machine_get_max_sids() - 1);
+        stereo_cmdline_options[0].description = sid_extra_range;
 
         if (cmdline_register_options(stereo_cmdline_options) < 0) {
+            return -1;
+        }
+        if (sid_address_cmdline_options_init() < 0) {
             return -1;
         }
         if (sid_chip_model_cmdline_options_init() < 0) {
@@ -770,6 +724,8 @@ int sid_cmdline_options_init(int sid_type)
 
 void sid_cmdline_options_shutdown(void)
 {
+    int chipno;
+
     /* sidengine_cmdline_options[0].description */
     if (sid_return) {
         lib_free(sid_return);
@@ -785,40 +741,14 @@ void sid_cmdline_options_shutdown(void)
         lib_free(sid_return_model);
         sid_return_model = NULL;
     }
-    if (sid2_address_range) {
-        lib_free(sid2_address_range);
-        sid2_address_range = NULL;
+    for (chipno = 0; chipno < SOUND_SIDS_MAX; chipno++) {
+        if (sid_address_range[chipno]) {
+            lib_free(sid_address_range[chipno]);
+            sid_address_range[chipno] = NULL;
+        }
     }
-    if (sid3_address_range) {
-        lib_free(sid3_address_range);
-        sid3_address_range = NULL;
-    }
-    if (sid4_address_range) {
-        lib_free(sid4_address_range);
-        sid4_address_range = NULL;
-    }
-    if (sid5_address_range) {
-        lib_free(sid5_address_range);
-        sid5_address_range = NULL;
-    }
-    if (sid6_address_range) {
-        lib_free(sid6_address_range);
-        sid6_address_range = NULL;
-    }
-    if (sid7_address_range) {
-        lib_free(sid7_address_range);
-        sid7_address_range = NULL;
-    }
-    if (sid8_address_range) {
-        lib_free(sid8_address_range);
-        sid8_address_range = NULL;
-    }
-    if (sid9_address_range) {
-        lib_free(sid9_address_range);
-        sid9_address_range = NULL;
-    }
-    if (sid10_address_range) {
-        lib_free(sid10_address_range);
-        sid10_address_range = NULL;
+    if (sid_extra_range) {
+        lib_free(sid_extra_range);
+        sid_extra_range = NULL;
     }
 }

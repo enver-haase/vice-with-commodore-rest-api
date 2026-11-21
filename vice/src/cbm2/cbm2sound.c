@@ -72,47 +72,7 @@ void sid_sound_chip_init(void)
 
 /* ---------------------------------------------------------------------*/
 
-int machine_sid2_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid3_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid4_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid5_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid6_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid7_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid8_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid9_check_range(unsigned int sid_adr)
-{
-    return 0;
-}
-
-int machine_sid10_check_range(unsigned int sid_adr)
+int machine_sid_check_range(int chipno, unsigned int sid_adr)
 {
     return 0;
 }

@@ -154,32 +154,9 @@ void machine_handle_pending_alarms(CLOCK num_write_cycles);
 int machine_autodetect_psid(const char *name);
 void machine_play_psid(int tune);
 
-/* Check the base address for the second sid chip.  */
-int machine_sid2_check_range(unsigned int sid_adr);
-
-/* Check the base address for the third sid chip.  */
-int machine_sid3_check_range(unsigned int sid_adr);
-
-/* Check the base address for the fourth sid chip.  */
-int machine_sid4_check_range(unsigned int sid_adr);
-
-/* Check the base address for the fifth sid chip.  */
-int machine_sid5_check_range(unsigned int sid_adr);
-
-/* Check the base address for the sixth sid chip.  */
-int machine_sid6_check_range(unsigned int sid_adr);
-
-/* Check the base address for the seventh sid chip.  */
-int machine_sid7_check_range(unsigned int sid_adr);
-
-/* Check the base address for the eighth sid chip.  */
-int machine_sid8_check_range(unsigned int sid_adr);
-
-/* Check the base address for the ninth sid chip.  */
-int machine_sid9_check_range(unsigned int sid_adr);
-
-/* Check the base address for the tenth sid chip.  */
-int machine_sid10_check_range(unsigned int sid_adr);
+/* Check the base address of a further SID chip, and move the chip there;
+   chipno counts from 0 for the first, so it is 1 and up here.  */
+int machine_sid_check_range(int chipno, unsigned int sid_adr);
 
 /* Change the timing parameters of the maching (for example PAL/NTSC).  */
 void machine_change_timing(int timeval, int powerfreq, int border_mode);
